@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/cards")
@@ -34,11 +35,10 @@ public class CardController {
 
     }
 
-    @GetMapping("/transactions")
-    public List<Transaction> getTransactions() {
-
-        return new ArrayList<>();
-
+    @GetMapping("/transactions/{cardId}")
+    public List<Map<String, software.amazon.awssdk.services.dynamodb.model.AttributeValue>> getTransactions(
+            @PathVariable String cardId) {
+        return cardService.getTransactionsByCard(cardId);
     }
 
 }

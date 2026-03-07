@@ -77,14 +77,29 @@ bank-card-transaction-service
 
 Para trabajar en este proyecto localmente, asegúrate de tener instalado Java 17 y Maven.
 
-### 1. Compilación del Proyecto
-Para descargar las dependencias, compilar el código y generar el archivo `.jar`, ejecuta:
+### 1. Compilación del Proyecto (Para AWS Lambda)
+El proyecto utiliza el **`maven-shade-plugin`** para generar un "Fat JAR" que contiene todas las dependencias necesarias. Esto es CRÍTICO para que AWS Lambda pueda encontrar las clases de ejecución.
 
+Para compilar y empaquetar, ejecuta:
 ```bash
 mvn clean package
 ```
 
-Si la ejecución es correcta, deberías ver el mensaje `BUILD SUCCESS`.
+**Archivos Generados:**
+- `target/bank-card-transaction-service-1.0-SNAPSHOT.jar`: **Este es el archivo correcto para subir a AWS.** Pesa aproximadamente 88 MB.
+- `target/original-bank-card-transaction-service-1.0-SNAPSHOT.jar`: Archivo base (no sirve para despliegue directo en Lambda).
+
+### 2. Despliegue en AWS Lambda
+Debido a que el archivo `.jar` resultante supera los 50 MB, AWS requiere cargarlo a través de **Amazon S3**:
+
+1. Subir el archivo `bank-card-transaction-service-1.0-SNAPSHOT.jar` a un Bucket de S3.
+2. En la consola de Lambda, ir a la pestaña **Código** -> **Cargar desde** -> **Ubicación de Amazon S3**.
+3. Pegar la URL de S3 del archivo.
+
+**Configuración Obligatoria (Runtime Settings):**
+- **Handler:** `com.bank.lambda.TransactionSaveLambda::handleRequest`
+- **Runtime:** Java 17 (o superior)
+- **Arquitectura:** x86_64
 
 ### 2. Pruebas de Conexión AWS (Locales)
 Hemos incluido utilidades para validar la conectividad con los servicios de AWS antes del despliegue.

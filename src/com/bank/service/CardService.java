@@ -6,9 +6,12 @@ import com.bank.utils.SQSClient;
 import org.springframework.stereotype.Service;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import software.amazon.awssdk.services.dynamodb.model.PutItemRequest;
+import software.amazon.awssdk.services.dynamodb.model.ScanRequest;
 import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -56,6 +59,19 @@ public class CardService {
 
         SQSClient.client.sendMessage(request);
 
+    }
+
+    public List<Map<String, AttributeValue>> getTransactionsByCard(String cardId) {
+        Map<String, AttributeValue> expressionAttributeValues = new HashMap<>();
+        expressionAttributeValues.put(":v1", AttributeValue.builder().s(cardId).build());
+
+        ScanRequest scanRequest = ScanRequest.builder()
+                .tableName("bank-transactions")
+                .filterExpression("card_id = :v1")
+                .expressionAttributeValues(expressionAttributeValues)
+                .build();
+
+        return DynamoClient.client.scan(scanRequest).items();
     }
 
 }
