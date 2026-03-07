@@ -54,8 +54,11 @@ bank-card-transaction-service
 │   │   ├── card.java
 │   │   └── transaction.java
 │   │
-│   └── utils            # Clientes de AWS y utilidades comunes
-│       └── dynamoClient.java
+│   ├── utils            # Clientes de AWS y utilidades comunes
+│   │   └── dynamoClient.java
+│   │
+│   ├── TestDynamoConnection.java # Clase para probar la conexión con DynamoDB
+│   └── TestSQS.java              # Clase para probar el envío de mensajes a SQS
 │
 ├── lambdas              # Handlers específicos para AWS Lambda
 │   ├── createRequestCardLambda.java
@@ -70,4 +73,46 @@ bank-card-transaction-service
 └── README.md            # Documentación del proyecto
 ```
 
+## Desarrollo y Pruebas
 
+Para trabajar en este proyecto localmente, asegúrate de tener instalado Java 17 y Maven.
+
+### 1. Compilación del Proyecto
+Para descargar las dependencias, compilar el código y generar el archivo `.jar`, ejecuta:
+
+```bash
+mvn clean package
+```
+
+Si la ejecución es correcta, deberías ver el mensaje `BUILD SUCCESS`.
+
+### 2. Pruebas de Conexión AWS (Locales)
+Hemos incluido utilidades para validar la conectividad con los servicios de AWS antes del despliegue.
+
+#### Prueba de DynamoDB
+Lista las tablas disponibles en tu cuenta para confirmar acceso:
+1. Asegúrate de que `pom.xml` tenga `<mainClass>TestDynamoConnection</mainClass>`.
+2. Ejecuta:
+```bash
+mvn exec:java
+```
+
+**Resultado esperado (DynamoDB):**
+Si la conexión es exitosa (usando tus credenciales de AWS configuradas localmente), verás una lista de las tablas en tu cuenta:
+```text
+Tables:
+bank-cards
+bank-transactions
+bank-users
+```
+
+#### Prueba de SQS
+Envía un mensaje de prueba a la cola de transacciones:
+1. Cambia en `pom.xml` a `<mainClass>TestSQS</mainClass>`.
+2. Ejecuta:
+```bash
+mvn exec:java
+```
+
+**Resultado esperado (SQS):**
+Verás el mensaje `Message sent` en la consola.
