@@ -1,0 +1,31 @@
+# Maven
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.restore
+release.properties
+dependency-reduced-pom.xml
+build.log
+.incremental/
+
+# Compilación de Java
+*.class
+
+# IDEs
+.idea/
+*.iml
+*.iws
+.vscode/
+.classpath
+.project
+.settings/
+.nb-gradle/
+
+# LogFiles
+logs/
+*.log
+
+# Datos Sensibles
+.env
+secret-keys/
