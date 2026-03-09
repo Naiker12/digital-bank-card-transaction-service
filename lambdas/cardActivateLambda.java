@@ -23,15 +23,17 @@ public class cardActivateLambda implements RequestHandler<Map<String, Object>, M
     public Map<String, Object> handleRequest(Map<String, Object> input, Context context) {
         try {
             String bodyString = (String) input.get("body");
-            if (bodyString == null)
-                return buildResponse(400, "{\"error\": \"Empty body\"}");
+            if (bodyString == null || bodyString.isEmpty()) {
+                return buildResponse(400, "{\"error\": \"Request body is empty\"}");
+            }
 
             Map<String, Object> body = objectMapper.readValue(bodyString, Map.class);
             String userId = (String) body.get("userId");
             String cardId = (String) body.get("cardId");
 
-            if (cardId == null)
-                return buildResponse(400, "{\"error\": \"cardId is required\"}");
+            if (cardId == null) {
+                return buildResponse(400, "{\"error\": \"cardId field is required in JSON body\"}");
+            }
 
             // 🔍 Buscar tarjeta por PK (uuid)
             QueryRequest queryRequest = QueryRequest.builder()
@@ -43,7 +45,7 @@ public class cardActivateLambda implements RequestHandler<Map<String, Object>, M
 
             QueryResponse queryResponse = dynamoDbClient.query(queryRequest);
             if (!queryResponse.hasItems() || queryResponse.items().isEmpty()) {
-                return buildResponse(404, "{\"error\": \"Card not found\"}");
+                return buildResponse(404, "{\"error\": \"Card not found for ID: " + cardId + "\"}");
             }
 
             Map<String, AttributeValue> cardItem = queryResponse.items().get(0);
@@ -64,24 +66,30 @@ public class cardActivateLambda implements RequestHandler<Map<String, Object>, M
 
             if (notificationQueueUrl != null) {
                 String payload = String.format(
-                        "{\"type\": \"CARD.ACTIVATE\", \"data\": {\"userId\": \"%s\", \"cardId\": \"%s\"}}", userId,
-                        cardId);
+                        "{\"type\": \"CARD.ACTIVATE\", \"data\": {\"userId\": \"%s\", \"cardId\": \"%s\"}}",
+                        userId != null ? userId : "unknown", cardId);
                 sqsClient.sendMessage(
                         SendMessageRequest.builder().queueUrl(notificationQueueUrl).messageBody(payload).build());
             }
 
-            return buildResponse(200, "{\"message\": \"Card activated successfully\"}");
+            return buildResponse(200, "{\"message\": \"Card activated successfully\", \"cardId\": \"" + cardId + "\"}");
 
         } catch (Exception e) {
-            context.getLogger().log("Error: " + e.getMessage());
-            return buildResponse(500, "{\"error\": \"" + e.getMessage() + "\"}");
+            context.getLogger().log("Error fatal: " + e.toString());
+            String errorMsg = e.getMessage() != null ? e.getMessage() : e.toString();
+            return buildResponse(500,
+                    "{\"error\": \"Internal Server Error\", \"details\": \"" + errorMsg.replace("\"", "\\\"") + "\"}");
         }
     }
 
     private Map<String, Object> buildResponse(int statusCode, String body) {
         Map<String, Object> response = new HashMap<>();
         response.put("statusCode", statusCode);
-        response.put("headers", Map.of("Content-Type", "application/json", "Access-Control-Allow-Origin", "*"));
+        response.put("isBase64Encoded", false);
+        response.put("headers", Map.of(
+                "Content-Type", "application/json",
+                "Access-Control-Allow-Origin", "*",
+                "Access-Control-Allow-Methods", "POST, OPTIONS"));
         response.put("body", body);
         return response;
     }

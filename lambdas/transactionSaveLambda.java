@@ -26,26 +26,32 @@ public class transactionSaveLambda implements RequestHandler<Map<String, Object>
     @Override
     public Map<String, Object> handleRequest(Map<String, Object> input, Context context) {
         try {
+            // 🔍 Obtener card_id de pathParameters (lo que viene en la URL)
             Map<String, String> pathParameters = (Map<String, String>) input.get("pathParameters");
-            String cardId = pathParameters != null ? pathParameters.get("card_id") : null;
-
-            if (cardId == null) {
-                // Try to get card_id from body if not in path
-                String bodyString = (String) input.get("body");
-                if (bodyString != null) {
-                    Map<String, Object> body = objectMapper.readValue(bodyString, Map.class);
-                    cardId = (String) body.get("cardId");
-                }
-            }
-
-            if (cardId == null) {
-                return buildResponse(400, "{\"error\": \"Card ID is required\"}");
-            }
+            String cardId = (pathParameters != null) ? pathParameters.get("card_id") : null;
 
             String bodyString = (String) input.get("body");
+            if (bodyString == null || bodyString.isEmpty()) {
+                return buildResponse(400, "{\"error\": \"Request body is empty\"}");
+            }
+
             Map<String, Object> body = objectMapper.readValue(bodyString, Map.class);
+
+            // Si no está en la URL, intentar sacarlo del body
+            if (cardId == null) {
+                cardId = (String) body.get("cardId");
+            }
+
+            if (cardId == null) {
+                return buildResponse(400, "{\"error\": \"Card ID is required in URL or body\"}");
+            }
+
+            Object amountObj = body.get("amount");
+            if (amountObj == null) {
+                return buildResponse(400, "{\"error\": \"Amount is required\"}");
+            }
+            double amount = Double.parseDouble(amountObj.toString());
             String merchant = (String) body.getOrDefault("merchant", "SAVING");
-            double amount = Double.parseDouble(body.get("amount").toString());
 
             // 1. Obtener tarjeta usando Query por PK
             QueryRequest queryRequest = QueryRequest.builder()
@@ -57,7 +63,7 @@ public class transactionSaveLambda implements RequestHandler<Map<String, Object>
 
             QueryResponse queryResponse = dynamoDbClient.query(queryRequest);
             if (!queryResponse.hasItems() || queryResponse.items().isEmpty()) {
-                return buildResponse(404, "{\"error\": \"Card not found\"}");
+                return buildResponse(404, "{\"error\": \"Card not found for ID: " + cardId + "\"}");
             }
 
             Map<String, AttributeValue> card = queryResponse.items().get(0);
@@ -105,8 +111,9 @@ public class transactionSaveLambda implements RequestHandler<Map<String, Object>
             return buildResponse(200, "{\"message\": \"Deposit successful\", \"newBalance\": " + newBalance + "}");
 
         } catch (Exception e) {
-            context.getLogger().log("Error: " + e.getMessage());
-            return buildResponse(500, "{\"error\": \"" + e.getMessage() + "\"}");
+            context.getLogger().log("Error fatal: " + e.getMessage());
+            return buildResponse(500,
+                    "{\"error\": \"Internal Server Error\", \"details\": \"" + e.getMessage() + "\"}");
         }
     }
 

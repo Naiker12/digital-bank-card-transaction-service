@@ -29,24 +29,28 @@ public class cardPaidLambda implements RequestHandler<Map<String, Object>, Map<S
             Map<String, String> pathParameters = (Map<String, String>) input.get("pathParameters");
             String cardId = pathParameters != null ? pathParameters.get("card_id") : null;
 
-            if (cardId == null) {
-                String bodyString = (String) input.get("body");
-                if (bodyString != null) {
-                    Map<String, Object> body = objectMapper.readValue(bodyString, Map.class);
-                    cardId = (String) body.get("cardId");
-                }
-            }
-
-            if (cardId == null) {
-                return buildResponse(400, "{\"error\": \"Card ID is required\"}");
-            }
-
             String bodyString = (String) input.get("body");
-            Map<String, Object> body = objectMapper.readValue(bodyString, Map.class);
-            String merchant = (String) body.getOrDefault("merchant", "PSE");
-            double amount = Double.parseDouble(body.get("amount").toString());
+            if (bodyString == null || bodyString.isEmpty()) {
+                return buildResponse(400, "{\"error\": \"Request body is empty\"}");
+            }
 
-            // 1. Obtener tarjeta
+            Map<String, Object> body = objectMapper.readValue(bodyString, Map.class);
+            if (cardId == null) {
+                cardId = (String) body.get("cardId");
+            }
+
+            if (cardId == null) {
+                return buildResponse(400, "{\"error\": \"Card ID is required in URL or body\"}");
+            }
+
+            String merchant = (String) body.getOrDefault("merchant", "PSE");
+            Object amountObj = body.get("amount");
+            if (amountObj == null) {
+                return buildResponse(400, "{\"error\": \"amount field is missing\"}");
+            }
+            double amount = Double.parseDouble(amountObj.toString());
+
+            // 1. Obtener tarjeta usando PK (uuid)
             QueryRequest queryRequest = QueryRequest.builder()
                     .tableName(cardTableName)
                     .keyConditionExpression("#uuid = :id")
@@ -56,7 +60,7 @@ public class cardPaidLambda implements RequestHandler<Map<String, Object>, Map<S
 
             QueryResponse queryResponse = dynamoDbClient.query(queryRequest);
             if (!queryResponse.hasItems() || queryResponse.items().isEmpty()) {
-                return buildResponse(404, "{\"error\": \"Card not found\"}");
+                return buildResponse(404, "{\"error\": \"Card not found for ID: " + cardId + "\"}");
             }
 
             Map<String, AttributeValue> card = queryResponse.items().get(0);
@@ -67,7 +71,8 @@ public class cardPaidLambda implements RequestHandler<Map<String, Object>, Map<S
             double currentBalance = Double.parseDouble(card.get("balance").n());
 
             if (!"CREDIT".equalsIgnoreCase(cardType)) {
-                return buildResponse(400, "{\"error\": \"Payment only allowed on CREDIT cards\"}");
+                return buildResponse(400,
+                        "{\"error\": \"Payment only allowed on CREDIT cards. Current card type: " + cardType + "\"}");
             }
 
             double newBalance = currentBalance + amount;
@@ -110,14 +115,16 @@ public class cardPaidLambda implements RequestHandler<Map<String, Object>, Map<S
                     "{\"message\": \"Payment applied successfully\", \"newBalance\": " + newBalance + "}");
 
         } catch (Exception e) {
-            context.getLogger().log("Error: " + e.getMessage());
-            return buildResponse(500, "{\"error\": \"" + e.getMessage() + "\"}");
+            context.getLogger().log("Error fatal: " + e.toString());
+            return buildResponse(500, "{\"error\": \"Internal Server Error\", \"details\": \""
+                    + e.toString().replace("\"", "\\\"") + "\"}");
         }
     }
 
     private Map<String, Object> buildResponse(int statusCode, String body) {
         Map<String, Object> response = new HashMap<>();
         response.put("statusCode", statusCode);
+        response.put("isBase64Encoded", false);
         response.put("headers", Map.of("Content-Type", "application/json", "Access-Control-Allow-Origin", "*"));
         response.put("body", body);
         return response;

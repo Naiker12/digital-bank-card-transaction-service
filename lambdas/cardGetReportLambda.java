@@ -11,7 +11,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.List;
-import java.util.stream.Collectors;
 
 public class cardGetReportLambda implements RequestHandler<Map<String, Object>, Map<String, Object>> {
 
@@ -28,10 +27,11 @@ public class cardGetReportLambda implements RequestHandler<Map<String, Object>, 
             Map<String, String> pathParameters = (Map<String, String>) input.get("pathParameters");
             String cardId = pathParameters != null ? pathParameters.get("card_id") : null;
 
-            if (cardId == null)
-                return buildResponse(400, "{\"error\": \"Card ID is required\"}");
+            if (cardId == null) {
+                return buildResponse(400, "{\"error\": \"Card ID is required in URL\"}");
+            }
 
-            // 1. Buscar transacciones de la tarjeta
+            // 1. Buscar transacciones de la tarjeta mediante Scan
             ScanRequest scanRequest = ScanRequest.builder()
                     .tableName(transactionTableName)
                     .filterExpression("cardId = :id")
@@ -41,16 +41,7 @@ public class cardGetReportLambda implements RequestHandler<Map<String, Object>, 
             ScanResponse scanResponse = dynamoDbClient.scan(scanRequest);
             List<Map<String, AttributeValue>> transactions = scanResponse.items();
 
-            // 2. Generar CSV básico
-            StringBuilder csv = new StringBuilder("Date,Merchant,Amount,Type\n");
-            for (Map<String, AttributeValue> tx : transactions) {
-                csv.append(tx.get("createdAt").s()).append(",")
-                        .append(tx.get("merchant").s()).append(",")
-                        .append(tx.get("amount").n()).append(",")
-                        .append(tx.get("type").s()).append("\n");
-            }
-
-            // 3. Buscar el userId para notificar
+            // 2. Buscar el userId para notificar
             QueryRequest cardQuery = QueryRequest.builder()
                     .tableName(cardTableName)
                     .keyConditionExpression("#pk = :id")
@@ -61,14 +52,16 @@ public class cardGetReportLambda implements RequestHandler<Map<String, Object>, 
             QueryResponse cardResp = dynamoDbClient.query(cardQuery);
             String userId = "unknown";
             if (!cardResp.items().isEmpty()) {
-                userId = cardResp.items().get(0).get("user_id").s();
+                Map<String, AttributeValue> cardItem = cardResp.items().get(0);
+                userId = cardItem.containsKey("user_id") ? cardItem.get("user_id").s()
+                        : (cardItem.containsKey("userId") ? cardItem.get("userId").s() : "unknown");
             }
 
-            // 4. Enviar notificación de reporte
+            // 3. Enviar notificación de reporte
             if (notificationQueueUrl != null) {
                 String payload = String.format(
                         "{\"type\":\"REPORT.ACTIVITY\",\"data\":{\"userId\":\"%s\",\"cardId\":\"%s\",\"report\": \"%s\"}}",
-                        userId, cardId, "CSV Generated and ready");
+                        userId, cardId, "Report generated correctly");
                 sqsClient.sendMessage(
                         SendMessageRequest.builder().queueUrl(notificationQueueUrl).messageBody(payload).build());
             }
@@ -77,14 +70,16 @@ public class cardGetReportLambda implements RequestHandler<Map<String, Object>, 
                     + transactions.size() + "}");
 
         } catch (Exception e) {
-            context.getLogger().log("Error generating report: " + e.getMessage());
-            return buildResponse(500, "{\"error\": \"" + e.getMessage() + "\"}");
+            context.getLogger().log("Error en reporte: " + e.toString());
+            return buildResponse(500, "{\"error\": \"Internal Server Error\", \"details\": \""
+                    + e.toString().replace("\"", "\\\"") + "\"}");
         }
     }
 
     private Map<String, Object> buildResponse(int statusCode, String body) {
         Map<String, Object> response = new HashMap<>();
         response.put("statusCode", statusCode);
+        response.put("isBase64Encoded", false);
         response.put("headers", Map.of("Content-Type", "application/json", "Access-Control-Allow-Origin", "*"));
         response.put("body", body);
         return response;

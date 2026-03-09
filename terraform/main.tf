@@ -151,7 +151,8 @@ resource "aws_iam_policy" "lambda_full_backend_access" {
           "dynamodb:*",
           "sqs:*",
           "s3:*",
-          "secretsmanager:*"
+          "secretsmanager:*",
+          "ses:*"
         ]
         Resource = "*"
       }
@@ -284,6 +285,7 @@ resource "aws_lambda_function" "send_notifications" {
       SMTP_HOST       = "smtp.gmail.com"
       USER_TABLE      = aws_dynamodb_table.user_table.name
       TEMPLATE_BUCKET = aws_s3_bucket.email_templates.id
+      EMAIL_SOURCE    = "naikergomez0123@gmail.com"
     }
   }
 }
@@ -358,6 +360,7 @@ resource "aws_lambda_function" "card_activate" {
   handler       = "lambdas.cardActivateLambda::handleRequest"
   runtime       = "java17"
   memory_size   = 512
+  timeout       = 30
 
   environment {
     variables = {
@@ -375,6 +378,7 @@ resource "aws_lambda_function" "transaction_save" {
   handler       = "lambdas.transactionSaveLambda::handleRequest"
   runtime       = "java17"
   memory_size   = 512
+  timeout       = 30
 
   environment {
     variables = {
@@ -393,6 +397,7 @@ resource "aws_lambda_function" "card_paid" {
   handler       = "lambdas.cardPaidLambda::handleRequest"
   runtime       = "java17"
   memory_size   = 512
+  timeout       = 30
 
   environment {
     variables = {
@@ -628,6 +633,7 @@ resource "aws_lambda_function" "card_report" {
   handler       = "lambdas.cardGetReportLambda::handleRequest"
   runtime       = "java17"
   memory_size   = 512
+  timeout       = 30
 
   environment {
     variables = {
