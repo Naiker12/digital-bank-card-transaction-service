@@ -1,4 +1,4 @@
-# Maven
+# Maven y Build de Java
 target/
 pom.xml.tag
 pom.xml.releaseBackup
@@ -8,11 +8,9 @@ release.properties
 dependency-reduced-pom.xml
 build.log
 .incremental/
-
-# Compilación de Java
 *.class
 
-# IDEs
+# IDEs y Editores
 .idea/
 *.iml
 *.iws
@@ -21,11 +19,38 @@ build.log
 .project
 .settings/
 .nb-gradle/
+*.swp
+*.swo
 
-# LogFiles
+# Logs
 logs/
 *.log
 
-# Datos Sensibles
+# Variables de entorno y credenciales (Archivos Delicados)
 .env
+.env.*
+!.env.example
 secret-keys/
+*.pem
+*.key
+certs/
+
+# OS File System
+.DS_Store
+Thumbs.db
+
+# Infraestructura como Código: Terraform (¡MUY CRÍTICO!)
+.terraform/
+terraform.tfstate
+terraform.tfstate.backup
+.terraform.lock.hcl
+*.tfvars
+*.tfvars.json
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Serverless framework / AWS SAM
+.serverless/
+.aws-sam/
