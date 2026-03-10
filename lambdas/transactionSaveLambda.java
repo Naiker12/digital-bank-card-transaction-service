@@ -26,7 +26,7 @@ public class transactionSaveLambda implements RequestHandler<Map<String, Object>
     @Override
     public Map<String, Object> handleRequest(Map<String, Object> input, Context context) {
         try {
-            // 🔍 Obtener card_id de pathParameters (lo que viene en la URL)
+            // 1. Get card_id from path parameters or body
             Map<String, String> pathParameters = (Map<String, String>) input.get("pathParameters");
             String cardId = (pathParameters != null) ? pathParameters.get("card_id") : null;
 
@@ -37,7 +37,6 @@ public class transactionSaveLambda implements RequestHandler<Map<String, Object>
 
             Map<String, Object> body = objectMapper.readValue(bodyString, Map.class);
 
-            // Si no está en la URL, intentar sacarlo del body
             if (cardId == null) {
                 cardId = (String) body.get("cardId");
             }
@@ -53,7 +52,7 @@ public class transactionSaveLambda implements RequestHandler<Map<String, Object>
             double amount = Double.parseDouble(amountObj.toString());
             String merchant = (String) body.getOrDefault("merchant", "SAVING");
 
-            // 1. Obtener tarjeta usando Query por PK
+            // 2. Fetch card using Query
             QueryRequest queryRequest = QueryRequest.builder()
                     .tableName(cardTableName)
                     .keyConditionExpression("#uuid = :id")
@@ -74,7 +73,7 @@ public class transactionSaveLambda implements RequestHandler<Map<String, Object>
 
             double newBalance = currentBalance + amount;
 
-            // 2. Actualizar Balance
+            // 3. Update Balance
             UpdateItemRequest updateReq = UpdateItemRequest.builder()
                     .tableName(cardTableName)
                     .key(Map.of(
@@ -86,7 +85,7 @@ public class transactionSaveLambda implements RequestHandler<Map<String, Object>
                     .build();
             dynamoDbClient.updateItem(updateReq);
 
-            // 3. Guardar Transacción
+            // 4. Save Transaction
             String txUuid = UUID.randomUUID().toString();
             String txCreatedAt = Instant.now().toString();
             Map<String, AttributeValue> txValues = new HashMap<>();
@@ -99,7 +98,7 @@ public class transactionSaveLambda implements RequestHandler<Map<String, Object>
 
             dynamoDbClient.putItem(PutItemRequest.builder().tableName(transactionTableName).item(txValues).build());
 
-            // 4. Notificar
+            // 5. Notify
             if (notificationQueueUrl != null && !notificationQueueUrl.isEmpty()) {
                 String payload = String.format(
                         "{\"type\":\"TRANSACTION.SAVE\",\"data\":{\"date\":\"%s\",\"merchant\":\"%s\",\"cardId\":\"%s\",\"amount\":%.2f,\"userId\":\"%s\"}}",

@@ -50,7 +50,7 @@ public class cardPaidLambda implements RequestHandler<Map<String, Object>, Map<S
             }
             double amount = Double.parseDouble(amountObj.toString());
 
-            // 1. Obtener tarjeta usando PK (uuid)
+            // 1. Fetch card using PK
             QueryRequest queryRequest = QueryRequest.builder()
                     .tableName(cardTableName)
                     .keyConditionExpression("#uuid = :id")
@@ -77,7 +77,7 @@ public class cardPaidLambda implements RequestHandler<Map<String, Object>, Map<S
 
             double newBalance = currentBalance + amount;
 
-            // 2. Actualizar Balance
+            // 2. Update Balance
             UpdateItemRequest updateReq = UpdateItemRequest.builder()
                     .tableName(cardTableName)
                     .key(Map.of(
@@ -89,7 +89,7 @@ public class cardPaidLambda implements RequestHandler<Map<String, Object>, Map<S
                     .build();
             dynamoDbClient.updateItem(updateReq);
 
-            // 3. Guardar Transacción
+            // 3. Save Transaction
             String txUuid = UUID.randomUUID().toString();
             String txCreatedAt = Instant.now().toString();
             Map<String, AttributeValue> txValues = new HashMap<>();
@@ -102,7 +102,7 @@ public class cardPaidLambda implements RequestHandler<Map<String, Object>, Map<S
 
             dynamoDbClient.putItem(PutItemRequest.builder().tableName(transactionTableName).item(txValues).build());
 
-            // 4. Notificar
+            // 4. Notify
             if (notificationQueueUrl != null && !notificationQueueUrl.isEmpty()) {
                 String payload = String.format(
                         "{\"type\":\"TRANSACTION.PAID\",\"data\":{\"date\":\"%s\",\"merchant\":\"%s\",\"cardId\":\"%s\",\"amount\":%.2f,\"userId\":\"%s\"}}",

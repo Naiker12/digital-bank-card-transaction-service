@@ -16,6 +16,7 @@ public class cardGetReportLambda implements RequestHandler<Map<String, Object>, 
 
     private final DynamoDbClient dynamoDbClient = DynamoDbClient.create();
     private final SqsClient sqsClient = SqsClient.create();
+    private final ObjectMapper objectMapper = new ObjectMapper();
     private final String transactionTableName = System.getenv().getOrDefault("TRANSACTION_TABLE_NAME",
             "transaction-table");
     private final String cardTableName = System.getenv().getOrDefault("CARD_TABLE_NAME", "card-table");
@@ -31,17 +32,38 @@ public class cardGetReportLambda implements RequestHandler<Map<String, Object>, 
                 return buildResponse(400, "{\"error\": \"Card ID is required in URL\"}");
             }
 
-            // 1. Buscar transacciones de la tarjeta mediante Scan
-            ScanRequest scanRequest = ScanRequest.builder()
-                    .tableName(transactionTableName)
-                    .filterExpression("cardId = :id")
-                    .expressionAttributeValues(Map.of(":id", AttributeValue.builder().s(cardId).build()))
-                    .build();
+            // Parse body for start/end dates if available
+            String start = null;
+            String end = null;
+            String bodyString = (String) input.get("body");
+            if (bodyString != null && !bodyString.isEmpty()) {
+                try {
+                    Map<String, Object> body = objectMapper.readValue(bodyString, Map.class);
+                    start = (String) body.get("start");
+                    end = (String) body.get("end");
+                } catch (Exception ignored) {
+                }
+            }
 
-            ScanResponse scanResponse = dynamoDbClient.scan(scanRequest);
+            // 1. Fetch transactions with date filter if applicable
+            ScanRequest.Builder scanBuilder = ScanRequest.builder()
+                    .tableName(transactionTableName);
+
+            String filterExpression = "cardId = :id";
+            Map<String, AttributeValue> expressionValues = new HashMap<>();
+            expressionValues.put(":id", AttributeValue.builder().s(cardId).build());
+
+            if (start != null && end != null) {
+                filterExpression += " AND createdAt BETWEEN :start AND :end";
+                expressionValues.put(":start", AttributeValue.builder().s(start).build());
+                expressionValues.put(":end", AttributeValue.builder().s(end).build());
+            }
+
+            scanBuilder.filterExpression(filterExpression).expressionAttributeValues(expressionValues);
+            ScanResponse scanResponse = dynamoDbClient.scan(scanBuilder.build());
             List<Map<String, AttributeValue>> transactions = scanResponse.items();
 
-            // 2. Buscar el userId para notificar
+            // 2. Fetch userId for notification
             QueryRequest cardQuery = QueryRequest.builder()
                     .tableName(cardTableName)
                     .keyConditionExpression("#pk = :id")
@@ -57,17 +79,17 @@ public class cardGetReportLambda implements RequestHandler<Map<String, Object>, 
                         : (cardItem.containsKey("userId") ? cardItem.get("userId").s() : "unknown");
             }
 
-            // 3. Enviar notificación de reporte
+            // 3. Send report notification
             if (notificationQueueUrl != null) {
                 String payload = String.format(
-                        "{\"type\":\"REPORT.ACTIVITY\",\"data\":{\"userId\":\"%s\",\"cardId\":\"%s\",\"report\": \"%s\"}}",
-                        userId, cardId, "Report generated correctly");
+                        "{\"type\":\"REPORT.ACTIVITY\",\"data\":{\"userId\":\"%s\",\"cardId\":\"%s\",\"report\": \"%s\", \"count\": %d}}",
+                        userId, cardId, "Report generated correctly with date filters", transactions.size());
                 sqsClient.sendMessage(
                         SendMessageRequest.builder().queueUrl(notificationQueueUrl).messageBody(payload).build());
             }
 
             return buildResponse(200, "{\"message\": \"Report generated and sent to email\", \"transactions_count\": "
-                    + transactions.size() + "}");
+                    + transactions.size() + ", \"params\": {\"start\": \"" + start + "\", \"end\": \"" + end + "\"}}");
 
         } catch (Exception e) {
             context.getLogger().log("Error en reporte: " + e.toString());

@@ -34,7 +34,7 @@ public class cardPurchaseLambda implements RequestHandler<Map<String, Object>, M
             String cardId = (String) body.get("cardId");
             double amount = Double.parseDouble(body.get("amount").toString());
 
-            // 1. Obtener la tarjeta de DynamoDB mediante Query (PK: uuid)
+            // 1. Fetch card from DynamoDB
             QueryRequest queryRequest = QueryRequest.builder()
                     .tableName(cardTableName)
                     .keyConditionExpression("#pk = :id")
@@ -54,21 +54,21 @@ public class cardPurchaseLambda implements RequestHandler<Map<String, Object>, M
                     : (card.containsKey("userId") ? card.get("userId").s() : "unknown");
             double balance = Double.parseDouble(card.get("balance").n());
 
-            // 2. Validar Fondos
+            // 2. Validate Funds
             if ("DEBIT".equalsIgnoreCase(cardType)) {
                 if (balance < amount) {
                     return buildResponse(400, "{\"error\": \"Insufficient funds for debit card\"}");
                 }
                 balance -= amount;
             } else if ("CREDIT".equalsIgnoreCase(cardType)) {
-                // Para crédito, asumimos que balance es crédito disponible
+                // For credit, balance is assumed to be available credit
                 if (balance < amount) {
                     return buildResponse(400, "{\"error\": \"Credit limit exceeded\"}");
                 }
                 balance -= amount;
             }
 
-            // 3. Actualizar Balance en Tarjeta
+            // 3. Update Balance
             Map<String, AttributeValue> keyMap = new HashMap<>();
             keyMap.put("uuid", AttributeValue.builder().s(cardId).build());
             keyMap.put("createdAt", AttributeValue.builder().s(createdAt).build());
@@ -82,7 +82,7 @@ public class cardPurchaseLambda implements RequestHandler<Map<String, Object>, M
                     .build();
             dynamoDbClient.updateItem(updateReq);
 
-            // 4. Guardar Transacción
+            // 4. Save Transaction
             String txUuid = UUID.randomUUID().toString();
             String txCreatedAt = Instant.now().toString();
             Map<String, AttributeValue> txValues = new HashMap<>();
@@ -95,7 +95,7 @@ public class cardPurchaseLambda implements RequestHandler<Map<String, Object>, M
 
             dynamoDbClient.putItem(PutItemRequest.builder().tableName(transactionTableName).item(txValues).build());
 
-            // 5. Enviar Notificación SQS
+            // 5. Send Notification
             if (notificationQueueUrl != null && !notificationQueueUrl.isEmpty()) {
                 String payload = String.format(
                         "{\"type\":\"TRANSACTION.PURCHASE\",\"data\":{\"date\":\"%s\",\"merchant\":\"%s\",\"cardId\":\"%s\",\"amount\":%.2f,\"userId\":\"%s\"}}",

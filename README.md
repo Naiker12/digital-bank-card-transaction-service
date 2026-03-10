@@ -1,133 +1,94 @@
-# Bank Card & Transaction Service 
+# Bank Card & Transaction Service
 
-Este es el repositorio central para la gestión de tarjetas bancarias y transacciones del sistema financiero. Este servicio se encarga de todo el ciclo de vida de una tarjeta, desde su solicitud y activación hasta el procesamiento de compras y pagos.
+This is the central repository for banking card management and transaction processing. This service manages the entire card lifecycle, from request and activation to purchase validation and payment processing.
 
-##  Responsabilidades del Servicio
+## Service Responsibilities
 
-El sistema está diseñado para manejar las siguientes funcionalidades críticas:
+The system is designed to handle the following critical functionalities:
 
-*   **Creación de Tarjetas:** Procesamiento inicial de solicitudes de nuevas tarjetas.
-*   **Aprobación de Crédito:** Lógica para validar y otorgar límites de crédito.
-*   **Activación de Tarjeta:** Proceso seguro para poner la tarjeta en estado operativo.
-*   **Registro de Compras:** Procesamiento en tiempo real de transacciones de compra.
-*   **Pagos:** Gestión de abonos y pagos a la tarjeta de crédito.
-*   **Historial de Transacciones:** Almacenamiento y consulta de movimientos financieros.
-*   **Reportes:** Generación de informes periódicos de estados de cuenta y consumos.
+* **Card Creation**: Asynchronous processing of new debit and credit card requests via SQS.
+* **Credit Approval**: Logic to validate and assign initial credit limits (default: 5000).
+* **Card Activation**: Secure activation process based on business rules.
+* **Purchase Validation**: Real-time processing and balance updates for purchases.
+* **Payments**: Managing credits and payments to card balances.
+* **Transaction History**: Secure storage of all financial movements for auditing.
+* **Reporting**: Generation of account statements and activity reports.
 
-##  Stack Tecnológico & Integraciones
+## Technology Stack & Integrations
 
-Este servicio está construido sobre **Java** y utiliza diversos servicios de **Amazon Web Services (AWS)** para garantizar escalabilidad y resiliencia:
+The service is built using **Java 17** and leverages several **Amazon Web Services (AWS)** to ensure high availability:
 
-*   **Java:** Lenguaje principal para la lógica de negocio.
-*   **AWS DynamoDB:** Almacenamiento NoSQL de alto rendimiento para perfiles de tarjetas y transacciones.
-*   **AWS SQS & DLQ:** Cola de mensajes para comunicación asíncrona entre microservicios, con manejo de errores mediante Dead Letter Queues.
-*   **AWS S3:** Almacenamiento de reportes generados en formatos como PDF o CSV.
-*   **AWS Lambda:** Arquitectura serverless para ejecutar tareas específicas de manera eficiente.
+* **Java**: Core language for financial logic and data processing.
+* **AWS DynamoDB**: High-performance NoSQL storage for card profiles and transactions.
+* **AWS SQS & DLQ**: Message queuing for asynchronous inter-service communication.
+* **AWS S3**: Storage for generated reports (PDF/CSV).
+* **AWS Lambda**: Serverless execution environment for specialized tasks.
 
-##  Arquitectura de Lambdas
+## Lambda Architecture
 
-El proyecto se divide en múltiples funciones Lambda especializadas:
+The project is composed of multiple specialized Lambda functions:
 
-| Lambda | Descripción |
+| Lambda | Description |
 | :--- | :--- |
-| `create-request-card-lambda` | Inicia el flujo de solicitud de una nueva tarjeta. |
-| `card-activate-lambda` | Gestiona el proceso de activación por parte del usuario. |
-| `card-purchase-lambda` | Valida y procesa una intención de compra. |
-| `card-transaction-save-lambda` | Persiste el registro de la transacción en la base de datos. |
-| `card-paid-credit-card-lambda` | Procesa los pagos realizados a la deuda de la tarjeta. |
-| `card-get-report-lambda` | Recupera información y genera reportes para el usuario. |
-| `card-request-failed` | Maneja los fallos en las solicitudes para auditoría y reintentos. |
+| `create-request-card-lambda` | Processes SQS messages to create Debit (ACTIVATED) or Credit (PENDING) cards. |
+| `card-activate-lambda` | **Business Rule**: Only activates Credit cards if the user has 10+ Debit purchases. |
+| `card-purchase-lambda` | Validates funds and processes real-time purchase transactions. |
+| `bank-transaction-save-lambda`| Persists transaction records in the database. |
+| `card-paid-lambda` | Processes payments and updates card balances. |
+| `card-report-lambda` | Aggregates data and generates activity reports via email. |
 
-##  Estructura del Proyecto
+## Project Structure
 
 ```text
 bank-card-transaction-service
 │
-├── src
-│   ├── controller       # Controladores para la lógica de orquestación
-│   │   └── cardController.java
-│   │
-│   ├── service          # Lógica de negocio y reglas financieras
-│   │   └── cardService.java
-│   │
-│   ├── model            # Definición de entidades (Card, Transaction, etc.)
-│   │   ├── card.java
-│   │   └── transaction.java
-│   │
-│   ├── utils            # Clientes de AWS y utilidades comunes
-│   │   └── dynamoClient.java
-│   │
-│   ├── TestDynamoConnection.java # Clase para probar la conexión con DynamoDB
-│   └── TestSQS.java              # Clase para probar el envío de mensajes a SQS
-│
-├── lambdas              # Handlers específicos para AWS Lambda
+├── lambdas                 # AWS Lambda Handlers (Java)
 │   ├── createRequestCardLambda.java
 │   ├── cardActivateLambda.java
 │   ├── cardPurchaseLambda.java
 │   ├── transactionSaveLambda.java
 │   ├── cardPaidLambda.java
-│   ├── cardReportLambda.java
-│   └── cardRequestFailedLambda.java
+│   └── cardReportLambda.java
 │
-├── pom.xml              # Configuración de dependencias (Maven)
-└── README.md            # Documentación del proyecto
+├── src                     # Core Application Logic
+│   ├── main/java
+│   │   ├── model           # Data structures (Card, Transaction)
+│   │   ├── service         # Business logic implementations
+│   │   └── utils           # AWS Clients (DynamoDB, SQS, SES)
+│
+├── terraform               # Infrastructure as Code
+│   └── main.tf             # AWS resource definitions
+├── pom.xml                 # Maven dependency management
+└── README.md               # Technical documentation
 ```
 
-## Desarrollo y Pruebas
+## Development and Deployment Commands
 
-Para trabajar en este proyecto localmente, asegúrate de tener instalado Java 17 y Maven.
+### 1. Project Compilation (Maven)
+The project uses the `maven-shade-plugin` to generate a "Fat JAR" containing all necessary dependencies for the AWS Lambda runtime.
 
-### 1. Compilación del Proyecto (Para AWS Lambda)
-El proyecto utiliza el **`maven-shade-plugin`** para generar un "Fat JAR" que contiene todas las dependencias necesarias. Esto es CRÍTICO para que AWS Lambda pueda encontrar las clases de ejecución.
-
-Para compilar y empaquetar, ejecuta:
 ```bash
+# Compile and package the project
 mvn clean package
 ```
 
-**Archivos Generados:**
-- `target/bank-card-transaction-service-1.0-SNAPSHOT.jar`: **Este es el archivo correcto para subir a AWS.** Pesa aproximadamente 88 MB.
-- `target/original-bank-card-transaction-service-1.0-SNAPSHOT.jar`: Archivo base (no sirve para despliegue directo en Lambda).
+**Artifacts Generated:**
+- `target/bank-card-transaction-service-1.0-SNAPSHOT.jar`: The production-ready JAR for AWS Lambda deployment.
 
-### 2. Despliegue en AWS Lambda
-Debido a que el archivo `.jar` resultante supera los 50 MB, AWS requiere cargarlo a través de **Amazon S3**:
+### 2. Infrastructure Deployment (Terraform)
+Infrastructure is managed from the `terraform` directory. Ensure the JAR has been built before applying.
 
-1. Subir el archivo `bank-card-transaction-service-1.0-SNAPSHOT.jar` a un Bucket de S3.
-2. En la consola de Lambda, ir a la pestaña **Código** -> **Cargar desde** -> **Ubicación de Amazon S3**.
-3. Pegar la URL de S3 del archivo.
-
-**Configuración Obligatoria (Runtime Settings):**
-- **Handler:** `com.bank.lambda.TransactionSaveLambda::handleRequest`
-- **Runtime:** Java 17 (o superior)
-- **Arquitectura:** x86_64
-
-### 2. Pruebas de Conexión AWS (Locales)
-Hemos incluido utilidades para validar la conectividad con los servicios de AWS antes del despliegue.
-
-#### Prueba de DynamoDB
-Lista las tablas disponibles en tu cuenta para confirmar acceso:
-1. Asegúrate de que `pom.xml` tenga `<mainClass>TestDynamoConnection</mainClass>`.
-2. Ejecuta:
 ```bash
-mvn exec:java
+cd terraform
+terraform init
+terraform apply -auto-approve
 ```
 
-**Resultado esperado (DynamoDB):**
-Si la conexión es exitosa (usando tus credenciales de AWS configuradas localmente), verás una lista de las tablas en tu cuenta:
-```text
-Tables:
-bank-cards
-bank-transactions
-bank-users
-```
+### 3. Business Rule: Credit Card Activation
+To activate a credit card, the following requirements must be met:
+1. The card must currently be in `PENDING` status.
+2. The user must have completed at least **10 purchases** using their **Debit** card.
+3. If requirements are not met, the API returns a descriptive error in Spanish explaining the missing criteria.
 
-#### Prueba de SQS
-Envía un mensaje de prueba a la cola de transacciones:
-1. Cambia en `pom.xml` a `<mainClass>TestSQS</mainClass>`.
-2. Ejecuta:
-```bash
-mvn exec:java
-```
+---
 
-**Resultado esperado (SQS):**
-Verás el mensaje `Message sent` en la consola.

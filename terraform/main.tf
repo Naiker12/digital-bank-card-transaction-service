@@ -2,9 +2,7 @@ provider "aws" {
   region = "us-east-1"
 }
 
-# ================================
 # 1. DynamoDB Tables
-# ================================
 resource "aws_dynamodb_table" "user_table" {
   name           = "bank-users"
   billing_mode   = "PAY_PER_REQUEST"
@@ -69,9 +67,7 @@ resource "aws_dynamodb_table" "notification_table" {
   }
 }
 
-# ================================
 # 2. SQS Queues & DLQ
-# ================================
 resource "aws_sqs_queue" "create_card_dlq" {
   name = "error-create-request-card-sqs"
 }
@@ -96,9 +92,7 @@ resource "aws_sqs_queue" "notification_queue" {
   })
 }
 
-# ================================
 # 3. S3 Buckets
-# ================================
 resource "random_id" "bucket_suffix" {
   byte_length = 4
 }
@@ -115,9 +109,7 @@ resource "aws_s3_bucket" "email_templates" {
   bucket = "templates-email-notification-${random_id.bucket_suffix.hex}"
 }
 
-# ================================
 # 4. IAM Role for Lambdas
-# ================================
 resource "aws_iam_role" "lambda_execution_role" {
   name = "bank_lambda_execution_role"
 
@@ -165,9 +157,7 @@ resource "aws_iam_role_policy_attachment" "attach_backend_access" {
   policy_arn = aws_iam_policy.lambda_full_backend_access.arn
 }
 
-# ================================
 # 5. Lambda Functions (Automated Deployment)
-# ================================
 
 # ZIP for User Service (Python)
 # Genera el ZIP automáticamente desde la carpeta de deployment
@@ -177,7 +167,7 @@ data "archive_file" "user_service_zip" {
   output_path = "${path.module}/user_service.zip"
 }
 
-# 🐍 User Service: Register
+# User Service: Register
 resource "aws_lambda_function" "register_user" {
   filename         = data.archive_file.user_service_zip.output_path
   function_name    = "register-user-lambda"
@@ -191,11 +181,12 @@ resource "aws_lambda_function" "register_user" {
       USERS_TABLE            = aws_dynamodb_table.user_table.name
       CARD_QUEUE_URL         = aws_sqs_queue.create_card_queue.url
       NOTIFICATION_QUEUE_URL = aws_sqs_queue.notification_queue.url
+      DEPLOY_TIMESTAMP       = "20260309_2210"
     }
   }
 }
 
-# 🐍 User Service: Login
+# User Service: Login
 resource "aws_lambda_function" "login_user" {
   filename         = data.archive_file.user_service_zip.output_path
   function_name    = "login-user-lambda"
@@ -213,7 +204,7 @@ resource "aws_lambda_function" "login_user" {
   }
 }
 
-# 🐍 User Service: Get Profile
+# User Service: Get Profile
 resource "aws_lambda_function" "get_profile" {
   filename         = data.archive_file.user_service_zip.output_path
   function_name    = "get-profile-lambda"
@@ -230,7 +221,7 @@ resource "aws_lambda_function" "get_profile" {
   }
 }
 
-# 🐍 User Service: Update User
+# User Service: Update User
 resource "aws_lambda_function" "update_user" {
   filename         = data.archive_file.user_service_zip.output_path
   function_name    = "update-user-lambda"
@@ -247,7 +238,7 @@ resource "aws_lambda_function" "update_user" {
   }
 }
 
-# 🐍 User Service: Upload Avatar
+# User Service: Upload Avatar
 resource "aws_lambda_function" "upload_avatar" {
   filename         = data.archive_file.user_service_zip.output_path
   function_name    = "upload-avatar-lambda"
@@ -265,7 +256,7 @@ resource "aws_lambda_function" "upload_avatar" {
   }
 }
 
-# 📦 Notification Service (Node.js)
+# Notification Service (Node.js)
 data "archive_file" "notification_service_zip" {
   type        = "zip"
   source_dir  = "d:/Notification Service/dist"
@@ -299,7 +290,7 @@ resource "aws_lambda_function" "send_notifications_error" {
   source_code_hash = data.archive_file.notification_service_zip.output_base64sha256
 }
 
-# ⚡ Triggers: SQS -> Notifications
+# Triggers: SQS -> Notifications
 resource "aws_lambda_event_source_mapping" "sqs_notifications" {
   event_source_arn = aws_sqs_queue.notification_queue.arn
   function_name    = aws_lambda_function.send_notifications.arn
@@ -310,7 +301,7 @@ resource "aws_lambda_event_source_mapping" "sqs_notifications_error" {
   function_name    = aws_lambda_function.send_notifications_error.arn
 }
 
-# ☕ Card Service: Create Card (Java)
+# Card Service: Create Card (Java)
 resource "aws_lambda_function" "create_card" {
   filename      = "d:/bank-card-transaction-service/target/bank-card-transaction-service-1.0-SNAPSHOT.jar"
   function_name = "create-request-card-lambda"
@@ -318,6 +309,7 @@ resource "aws_lambda_function" "create_card" {
   handler       = "lambdas.createRequestCardLambda::handleRequest"
   runtime       = "java17"
   memory_size   = 512
+  source_code_hash = filebase64sha256("d:/bank-card-transaction-service/target/bank-card-transaction-service-1.0-SNAPSHOT.jar")
 
   environment {
     variables = {
@@ -327,13 +319,13 @@ resource "aws_lambda_function" "create_card" {
   }
 }
 
-# ⚡ Trigger: SQS -> Create Card
+# Trigger: SQS -> Create Card
 resource "aws_lambda_event_source_mapping" "sqs_create_card" {
   event_source_arn = aws_sqs_queue.create_card_queue.arn
   function_name    = aws_lambda_function.create_card.arn
 }
 
-# ☕ Card Service: Purchase (Java)
+# Card Service: Purchase (Java)
 resource "aws_lambda_function" "card_purchase" {
   filename      = "d:/bank-card-transaction-service/target/bank-card-transaction-service-1.0-SNAPSHOT.jar"
   function_name = "card-purchase-lambda"
@@ -342,6 +334,7 @@ resource "aws_lambda_function" "card_purchase" {
   runtime       = "java17"
   memory_size   = 512
   timeout       = 30
+  source_code_hash = filebase64sha256("d:/bank-card-transaction-service/target/bank-card-transaction-service-1.0-SNAPSHOT.jar")
 
   environment {
     variables = {
@@ -352,7 +345,7 @@ resource "aws_lambda_function" "card_purchase" {
   }
 }
 
-# ☕ Card Service: Activate (Java)
+# Card Service: Activate (Java)
 resource "aws_lambda_function" "card_activate" {
   filename      = "d:/bank-card-transaction-service/target/bank-card-transaction-service-1.0-SNAPSHOT.jar"
   function_name = "card-activate-lambda"
@@ -361,6 +354,7 @@ resource "aws_lambda_function" "card_activate" {
   runtime       = "java17"
   memory_size   = 512
   timeout       = 30
+  source_code_hash = filebase64sha256("d:/bank-card-transaction-service/target/bank-card-transaction-service-1.0-SNAPSHOT.jar")
 
   environment {
     variables = {
@@ -370,7 +364,7 @@ resource "aws_lambda_function" "card_activate" {
   }
 }
 
-# ☕ Card Service: Transaction Save / Deposit (Java)
+# Card Service: Transaction Save / Deposit (Java)
 resource "aws_lambda_function" "transaction_save" {
   filename      = "d:/bank-card-transaction-service/target/bank-card-transaction-service-1.0-SNAPSHOT.jar"
   function_name = "bank-transaction-save-lambda"
@@ -379,6 +373,7 @@ resource "aws_lambda_function" "transaction_save" {
   runtime       = "java17"
   memory_size   = 512
   timeout       = 30
+  source_code_hash = filebase64sha256("d:/bank-card-transaction-service/target/bank-card-transaction-service-1.0-SNAPSHOT.jar")
 
   environment {
     variables = {
@@ -389,7 +384,7 @@ resource "aws_lambda_function" "transaction_save" {
   }
 }
 
-# ☕ Card Service: Card Paid (Java)
+# Card Service: Card Paid (Java)
 resource "aws_lambda_function" "card_paid" {
   filename      = "d:/bank-card-transaction-service/target/bank-card-transaction-service-1.0-SNAPSHOT.jar"
   function_name = "card-paid-lambda"
@@ -398,6 +393,7 @@ resource "aws_lambda_function" "card_paid" {
   runtime       = "java17"
   memory_size   = 512
   timeout       = 30
+  source_code_hash = filebase64sha256("d:/bank-card-transaction-service/target/bank-card-transaction-service-1.0-SNAPSHOT.jar")
 
   environment {
     variables = {
@@ -408,9 +404,7 @@ resource "aws_lambda_function" "card_paid" {
   }
 }
 
-# ================================
-# 6. API Gateway (HTTP API v2) - AUTOMATIZADO
-# ================================
+# 6. API Gateway (HTTP API v2)
 resource "aws_apigatewayv2_api" "banking_api" {
   name          = "banking-backend-api-v2"
   protocol_type = "HTTP"
@@ -422,7 +416,7 @@ resource "aws_apigatewayv2_stage" "default" {
   auto_deploy = true
 }
 
-# Integraciones de Usuario
+# User Integrations
 resource "aws_apigatewayv2_integration" "register" {
   api_id           = aws_apigatewayv2_api.banking_api.id
   integration_type = "AWS_PROXY"
@@ -483,7 +477,7 @@ resource "aws_apigatewayv2_route" "upload_avatar_route" {
   target    = "integrations/${aws_apigatewayv2_integration.upload_avatar.id}"
 }
 
-# Integraciones de Tarjetas y Transacciones
+# Cards & Transactions Integrations
 resource "aws_apigatewayv2_integration" "activate_card" {
   api_id           = aws_apigatewayv2_api.banking_api.id
   integration_type = "AWS_PROXY"
@@ -532,7 +526,7 @@ resource "aws_apigatewayv2_route" "card_paid_route" {
   target    = "integrations/${aws_apigatewayv2_integration.card_paid.id}"
 }
 
-# Permisos
+# Permissions
 resource "aws_lambda_permission" "api_gw_register" {
   statement_id  = "AllowExecutionFromAPIGateway"
   action        = "lambda:InvokeFunction"
@@ -625,7 +619,7 @@ resource "aws_lambda_permission" "api_gw_report" {
   source_arn    = "${aws_apigatewayv2_api.banking_api.execution_arn}/*/*"
 }
 
-# ☕ Card Service: Card Report (Java)
+# Card Service: Card Report (Java)
 resource "aws_lambda_function" "card_report" {
   filename      = "d:/bank-card-transaction-service/target/bank-card-transaction-service-1.0-SNAPSHOT.jar"
   function_name = "card-get-report-lambda"
@@ -644,9 +638,8 @@ resource "aws_lambda_function" "card_report" {
   }
 }
 
-# Outputs Finales
+# Final Outputs
 output "FINAL_API_URL" {
-  description = "USA ESTA URL EN POSTMAN"
+  description = "USE THIS URL IN POSTMAN"
   value       = aws_apigatewayv2_stage.default.invoke_url
 }
-
