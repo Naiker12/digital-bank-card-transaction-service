@@ -33,6 +33,17 @@ resource "aws_dynamodb_table" "card_table" {
     name = "createdAt"
     type = "S"
   }
+  attribute {
+    name = "user_id"
+    type = "S"
+  }
+
+  global_secondary_index {
+    name               = "UserIdIndex"
+    hash_key           = "user_id"
+    range_key          = "createdAt"
+    projection_type    = "ALL"
+  }
 }
 
 resource "aws_dynamodb_table" "transaction_table" {
@@ -48,6 +59,17 @@ resource "aws_dynamodb_table" "transaction_table" {
   attribute {
     name = "createdAt"
     type = "S"
+  }
+  attribute {
+    name = "cardId"
+    type = "S"
+  }
+
+  global_secondary_index {
+    name               = "CardIdIndex"
+    hash_key           = "cardId"
+    range_key          = "createdAt"
+    projection_type    = "ALL"
   }
 }
 
@@ -309,6 +331,7 @@ resource "aws_lambda_function" "create_card" {
   handler       = "lambdas.createRequestCardLambda::handleRequest"
   runtime       = "java17"
   memory_size   = 512
+  timeout       = 30
   source_code_hash = filebase64sha256("d:/bank-card-transaction-service/target/bank-card-transaction-service-1.0-SNAPSHOT.jar")
 
   environment {

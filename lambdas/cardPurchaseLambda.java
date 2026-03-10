@@ -104,11 +104,85 @@ public class cardPurchaseLambda implements RequestHandler<Map<String, Object>, M
                         SendMessageRequest.builder().queueUrl(notificationQueueUrl).messageBody(payload).build());
             }
 
+            // 6. Check for 10 Debit Purchases to Auto-Activate Credit
+            if ("DEBIT".equalsIgnoreCase(cardType)) {
+                checkAndActivateCredit(userId, cardId, context);
+            }
+
             return buildResponse(200, "{\"message\": \"Purchase successful\", \"remainingBalance\": " + balance + "}");
 
         } catch (Exception e) {
             context.getLogger().log("Error: " + e.getMessage());
             return buildResponse(500, "{\"error\": \"" + e.getMessage() + "\"}");
+        }
+    }
+
+    private void checkAndActivateCredit(String userId, String cardId, Context context) {
+        try {
+            // Count transactions for this debit card
+            software.amazon.awssdk.services.dynamodb.model.QueryRequest txQuery = software.amazon.awssdk.services.dynamodb.model.QueryRequest
+                    .builder()
+                    .tableName(transactionTableName)
+                    .indexName("CardIdIndex")
+                    .keyConditionExpression("cardId = :id")
+                    .expressionAttributeValues(Map.of(":id", AttributeValue.builder().s(cardId).build()))
+                    .select(Select.COUNT)
+                    .build();
+
+            int txCount = dynamoDbClient.query(txQuery).count();
+            context.getLogger().log("Current DEBIT transaction count for user " + userId + ": " + txCount);
+
+            if (txCount >= 10) {
+                // Find PENDING CREDIT card for this user
+                software.amazon.awssdk.services.dynamodb.model.QueryRequest cardQuery = software.amazon.awssdk.services.dynamodb.model.QueryRequest
+                        .builder()
+                        .tableName(cardTableName)
+                        .indexName("UserIdIndex")
+                        .keyConditionExpression("user_id = :u")
+                        .expressionAttributeValues(Map.of(":u", AttributeValue.builder().s(userId).build()))
+                        .build();
+
+                software.amazon.awssdk.services.dynamodb.model.QueryResponse cardResponse = dynamoDbClient
+                        .query(cardQuery);
+                for (Map<String, AttributeValue> item : cardResponse.items()) {
+                    if (item.containsKey("type") && item.get("type").s().equalsIgnoreCase("CREDIT") &&
+                            item.containsKey("status") && item.get("status").s().equalsIgnoreCase("PENDING")) {
+
+                        String creditCardId = item.get("uuid").s();
+                        String createdAt = item.get("createdAt").s();
+
+                        // Activate it
+                        Map<String, AttributeValue> keyMap = new HashMap<>();
+                        keyMap.put("uuid", AttributeValue.builder().s(creditCardId).build());
+                        keyMap.put("createdAt", AttributeValue.builder().s(createdAt).build());
+
+                        UpdateItemRequest activateReq = UpdateItemRequest.builder()
+                                .tableName(cardTableName)
+                                .key(keyMap)
+                                .updateExpression("SET #s = :a")
+                                .expressionAttributeNames(Map.of("#s", "status"))
+                                .expressionAttributeValues(
+                                        Map.of(":a", AttributeValue.builder().s("ACTIVATED").build()))
+                                .build();
+
+                        dynamoDbClient.updateItem(activateReq);
+                        context.getLogger().log("SUCCESS: Credit card " + creditCardId + " activated for user " + userId
+                                + " after 10 debit purchases.");
+
+                        // Notify activation
+                        if (notificationQueueUrl != null && !notificationQueueUrl.isEmpty()) {
+                            String msg = String.format(
+                                    "{\"type\":\"CARD.ACTIVATE\",\"data\":{\"userId\":\"%s\",\"cardId\":\"%s\",\"type\":\"CREDIT\",\"status\":\"ACTIVATED\"}}",
+                                    userId, creditCardId);
+                            sqsClient.sendMessage(SendMessageRequest.builder().queueUrl(notificationQueueUrl)
+                                    .messageBody(msg).build());
+                        }
+                        break;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            context.getLogger().log("Error in auto-activation check: " + e.getMessage());
         }
     }
 

@@ -28,10 +28,10 @@ public class createRequestCardLambda implements RequestHandler<SQSEvent, Void> {
     public Void handleRequest(SQSEvent event, Context context) {
         for (SQSEvent.SQSMessage message : event.getRecords()) {
             try {
-                // 1. Read SQS message data (consistent with register_user.py)
+                // 1. Read SQS message data
                 Map<String, Object> body = objectMapper.readValue(message.getBody(), Map.class);
                 String userId = (String) body.get("userId");
-                String requestType = (String) body.get("request"); // "DEBIT" or "CREDIT"
+                String requestType = (String) body.get("request");
 
                 context.getLogger().log("Processing card request: " + requestType + " for user: " + userId);
 
@@ -40,13 +40,18 @@ public class createRequestCardLambda implements RequestHandler<SQSEvent, Void> {
                     continue;
                 }
 
-                // 2. Process specific request
+                // 2. Check for duplicate requests (Idempotency)
+                if (isAlreadyCreated(userId, requestType, context)) {
+                    context.getLogger()
+                            .log("Card of type " + requestType + " already exists for user: " + userId + ". Skipping.");
+                    continue;
+                }
+
+                // 3. Process specific request
                 if ("CREDIT".equalsIgnoreCase(requestType)) {
-                    // Credit card starts PENDING with 5000 limit
-                    createCard(userId, "CREDIT", 5000.0, "PENDING", context);
+                    createCard(userId, "CREDIT", 0.0, "PENDING", context);
                 } else if ("DEBIT".equalsIgnoreCase(requestType)) {
-                    // Debit card starts ACTIVATED with 0 balance
-                    createCard(userId, "DEBIT", 0.0, "ACTIVATED", context);
+                    createCard(userId, "DEBIT", 500.0, "ACTIVATED", context);
                 }
 
             } catch (Exception e) {
@@ -54,6 +59,30 @@ public class createRequestCardLambda implements RequestHandler<SQSEvent, Void> {
             }
         }
         return null;
+    }
+
+    private boolean isAlreadyCreated(String userId, String type, Context context) {
+        try {
+            // Searching in UserIdIndex GSI
+            software.amazon.awssdk.services.dynamodb.model.QueryRequest queryRequest = software.amazon.awssdk.services.dynamodb.model.QueryRequest
+                    .builder()
+                    .tableName(cardTableName)
+                    .indexName("UserIdIndex")
+                    .keyConditionExpression("user_id = :u")
+                    .expressionAttributeValues(Map.of(":u", AttributeValue.builder().s(userId).build()))
+                    .build();
+
+            software.amazon.awssdk.services.dynamodb.model.QueryResponse response = dynamoDbClient.query(queryRequest);
+
+            for (Map<String, AttributeValue> item : response.items()) {
+                if (item.containsKey("type") && item.get("type").s().equalsIgnoreCase(type)) {
+                    return true;
+                }
+            }
+        } catch (Exception e) {
+            context.getLogger().log("Error checking for existing card: " + e.getMessage());
+        }
+        return false;
     }
 
     private void createCard(String userId, String type, double balance, String status, Context context) {
