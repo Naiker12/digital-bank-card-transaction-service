@@ -75,9 +75,10 @@ mvn clean package
 **Artifacts Generated:**
 - `target/bank-card-transaction-service-1.0-SNAPSHOT.jar`: The production-ready JAR for AWS Lambda deployment.
 
-### 2. Infrastructure Deployment (Terraform)
-Infrastructure is managed from the `terraform` directory. Ensure the JAR has been built before applying.
-
+### 2. Infrastructure Deployment (Independent Terraform)
+This service now manages its own infrastructure independently. It no longer contains the global configuration for other services.
+1. Ensure `terraform.tfvars` is present with shared infrastructure values (IAM Role, APIGW).
+2. Deploy:
 ```bash
 cd terraform
 terraform init
