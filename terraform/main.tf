@@ -2,7 +2,7 @@ provider "aws" {
   region = var.region
 }
 
-# 1. DynamoDB Tables
+
 resource "aws_dynamodb_table" "card_table" {
   name           = "card-table"
   billing_mode   = "PAY_PER_REQUEST"
@@ -57,7 +57,7 @@ resource "aws_dynamodb_table" "transaction_table" {
   }
 }
 
-# 2. S3 Buckets
+
 resource "random_id" "bucket_suffix" {
   byte_length = 4
 }
@@ -66,7 +66,7 @@ resource "aws_s3_bucket" "transactions_reports" {
   bucket = "transactions-report-bucket-${random_id.bucket_suffix.hex}"
 }
 
-# 3. SQS Queues & DLQ for Card Requests
+
 resource "aws_sqs_queue" "create_card_dlq" {
   name = "error-create-request-card-sqs"
 }
@@ -79,7 +79,7 @@ resource "aws_sqs_queue" "create_card_queue" {
   })
 }
 
-# 4. Lambda Functions (Java)
+
 # ZIP for Card Service
 # Note: Paths changed to relative
 locals {
@@ -198,7 +198,7 @@ resource "aws_lambda_function" "card_report" {
   }
 }
 
-# 5. Integrations & Routes
+
 resource "aws_apigatewayv2_integration" "activate_card" {
   api_id           = var.api_gateway_id
   integration_type = "AWS_PROXY"
@@ -259,7 +259,7 @@ resource "aws_apigatewayv2_route" "card_report_route" {
   target    = "integrations/${aws_apigatewayv2_integration.card_report.id}"
 }
 
-# 6. Permissions
+
 resource "aws_lambda_permission" "api_gw_activate" {
   statement_id  = "AllowExecutionFromAPIGatewayActivate"
   action        = "lambda:InvokeFunction"
@@ -300,7 +300,7 @@ resource "aws_lambda_permission" "api_gw_report" {
   source_arn    = "${var.api_gateway_execution_arn}/*/*"
 }
 
-# 7. Triggers: SQS -> Create Card
+
 resource "aws_lambda_event_source_mapping" "sqs_create_card" {
   event_source_arn = aws_sqs_queue.create_card_queue.arn
   function_name    = aws_lambda_function.create_card.arn
