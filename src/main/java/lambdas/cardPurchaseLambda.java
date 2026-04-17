@@ -119,7 +119,7 @@ public class cardPurchaseLambda implements RequestHandler<Map<String, Object>, M
 
     private void checkAndActivateCredit(String userId, String cardId, Context context) {
         try {
-            // Count transactions for this debit card
+            // Contar transacciones para esta tarjeta de débito
             software.amazon.awssdk.services.dynamodb.model.QueryRequest txQuery = software.amazon.awssdk.services.dynamodb.model.QueryRequest
                     .builder()
                     .tableName(transactionTableName)
@@ -151,7 +151,7 @@ public class cardPurchaseLambda implements RequestHandler<Map<String, Object>, M
                         String creditCardId = item.get("uuid").s();
                         String createdAt = item.get("createdAt").s();
 
-                        // Activar tarjeta
+                        // Activar tarjeta de crédito
                         Map<String, AttributeValue> keyMap = new HashMap<>();
                         keyMap.put("uuid", AttributeValue.builder().s(creditCardId).build());
                         keyMap.put("createdAt", AttributeValue.builder().s(createdAt).build());
@@ -169,7 +169,7 @@ public class cardPurchaseLambda implements RequestHandler<Map<String, Object>, M
                         context.getLogger().log("ÉXITO: Tarjeta de crédito " + creditCardId + " activada para el usuario " + userId
                                 + " después de 10 compras con débito.");
 
-                        // Notificar activación
+                        // Notificar activación de crédito
                         if (notificationQueueUrl != null && !notificationQueueUrl.isEmpty()) {
                             String msg = String.format(
                                     "{\"type\":\"CARD.ACTIVATE\",\"data\":{\"userId\":\"%s\",\"cardId\":\"%s\",\"type\":\"CREDIT\",\"status\":\"ACTIVATED\"}}",
