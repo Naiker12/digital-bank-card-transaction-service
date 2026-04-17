@@ -40,6 +40,7 @@ certs/
 Thumbs.db
 
 # Infraestructura como Código: Terraform
+terraform/
 .terraform/
 *.tfstate
 *.tfstate.*
