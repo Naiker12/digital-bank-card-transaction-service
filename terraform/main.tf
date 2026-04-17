@@ -1,8 +1,3 @@
-provider "aws" {
-  region = var.region
-}
-
-
 resource "aws_dynamodb_table" "card_table" {
   name           = "card-table"
   billing_mode   = "PAY_PER_REQUEST"
@@ -79,12 +74,6 @@ resource "aws_sqs_queue" "create_card_queue" {
   })
 }
 
-
-# ZIP for Card Service
-# Note: Paths changed to relative
-locals {
-  jar_path = "${path.module}/../target/bank-card-transaction-service-1.0-SNAPSHOT.jar"
-}
 
 resource "aws_lambda_function" "create_card" {
   filename      = local.jar_path

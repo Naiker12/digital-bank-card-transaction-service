@@ -39,17 +39,21 @@ certs/
 .DS_Store
 Thumbs.db
 
-# Infraestructura como Código: Terraform (¡MUY CRÍTICO!)
+# Infraestructura como Código: Terraform
 .terraform/
-terraform.tfstate
-terraform.tfstate.backup
-.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+crash.log
 *.tfvars
 *.tfvars.json
 override.tf
 override.tf.json
 *_override.tf
 *_override.tf.json
+.terraform.lock.hcl
+tfplan
+tfplan*
+*.zip
 
 # Serverless framework / AWS SAM
 .serverless/
