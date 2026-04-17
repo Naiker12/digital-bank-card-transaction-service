@@ -34,7 +34,7 @@ public class cardPurchaseLambda implements RequestHandler<Map<String, Object>, M
             String cardId = (String) body.get("cardId");
             double amount = Double.parseDouble(body.get("amount").toString());
 
-            // 1. Fetch card from DynamoDB
+            // Obtener tarjeta de DynamoDB
             QueryRequest queryRequest = QueryRequest.builder()
                     .tableName(cardTableName)
                     .keyConditionExpression("#pk = :id")
@@ -44,7 +44,7 @@ public class cardPurchaseLambda implements RequestHandler<Map<String, Object>, M
 
             QueryResponse queryResponse = dynamoDbClient.query(queryRequest);
             if (!queryResponse.hasItems() || queryResponse.items().isEmpty()) {
-                return buildResponse(404, "{\"error\": \"Card not found\"}");
+                return buildResponse(404, "{\"error\": \"Tarjeta no encontrada\"}");
             }
 
             Map<String, AttributeValue> card = queryResponse.items().get(0);
@@ -54,21 +54,21 @@ public class cardPurchaseLambda implements RequestHandler<Map<String, Object>, M
                     : (card.containsKey("userId") ? card.get("userId").s() : "unknown");
             double balance = Double.parseDouble(card.get("balance").n());
 
-            // 2. Validate Funds
+            // Validar Fondos
             if ("DEBIT".equalsIgnoreCase(cardType)) {
                 if (balance < amount) {
-                    return buildResponse(400, "{\"error\": \"Insufficient funds for debit card\"}");
+                    return buildResponse(400, "{\"error\": \"Fondos insuficientes en la tarjeta de débito\"}");
                 }
                 balance -= amount;
             } else if ("CREDIT".equalsIgnoreCase(cardType)) {
-                // For credit, balance is assumed to be available credit
+                // Para crédito, el saldo se asume como crédito disponible
                 if (balance < amount) {
-                    return buildResponse(400, "{\"error\": \"Credit limit exceeded\"}");
+                    return buildResponse(400, "{\"error\": \"Límite de crédito excedido\"}");
                 }
                 balance -= amount;
             }
 
-            // 3. Update Balance
+            // Actualizar Saldo
             Map<String, AttributeValue> keyMap = new HashMap<>();
             keyMap.put("uuid", AttributeValue.builder().s(cardId).build());
             keyMap.put("createdAt", AttributeValue.builder().s(createdAt).build());
@@ -82,7 +82,7 @@ public class cardPurchaseLambda implements RequestHandler<Map<String, Object>, M
                     .build();
             dynamoDbClient.updateItem(updateReq);
 
-            // 4. Save Transaction
+            // Guardar Transacción
             String txUuid = UUID.randomUUID().toString();
             String txCreatedAt = Instant.now().toString();
             Map<String, AttributeValue> txValues = new HashMap<>();
@@ -95,7 +95,7 @@ public class cardPurchaseLambda implements RequestHandler<Map<String, Object>, M
 
             dynamoDbClient.putItem(PutItemRequest.builder().tableName(transactionTableName).item(txValues).build());
 
-            // 5. Send Notification
+            // Enviar Notificación
             if (notificationQueueUrl != null && !notificationQueueUrl.isEmpty()) {
                 String payload = String.format(
                         "{\"type\":\"TRANSACTION.PURCHASE\",\"data\":{\"date\":\"%s\",\"merchant\":\"%s\",\"cardId\":\"%s\",\"amount\":%.2f,\"userId\":\"%s\"}}",
@@ -104,12 +104,12 @@ public class cardPurchaseLambda implements RequestHandler<Map<String, Object>, M
                         SendMessageRequest.builder().queueUrl(notificationQueueUrl).messageBody(payload).build());
             }
 
-            // 6. Check for 10 Debit Purchases to Auto-Activate Credit
+            // Verificar si hay 10 compras con débito para auto-activar crédito
             if ("DEBIT".equalsIgnoreCase(cardType)) {
                 checkAndActivateCredit(userId, cardId, context);
             }
 
-            return buildResponse(200, "{\"message\": \"Purchase successful\", \"remainingBalance\": " + balance + "}");
+            return buildResponse(200, "{\"message\": \"Compra exitosa\", \"remainingBalance\": " + balance + "}");
 
         } catch (Exception e) {
             context.getLogger().log("Error: " + e.getMessage());
@@ -130,10 +130,10 @@ public class cardPurchaseLambda implements RequestHandler<Map<String, Object>, M
                     .build();
 
             int txCount = dynamoDbClient.query(txQuery).count();
-            context.getLogger().log("Current DEBIT transaction count for user " + userId + ": " + txCount);
+            context.getLogger().log("Conteo actual de transacciones DEBIT para el usuario " + userId + ": " + txCount);
 
             if (txCount >= 10) {
-                // Find PENDING CREDIT card for this user
+                // Buscar tarjeta de CRÉDITO PENDIENTE para este usuario
                 software.amazon.awssdk.services.dynamodb.model.QueryRequest cardQuery = software.amazon.awssdk.services.dynamodb.model.QueryRequest
                         .builder()
                         .tableName(cardTableName)
@@ -151,7 +151,7 @@ public class cardPurchaseLambda implements RequestHandler<Map<String, Object>, M
                         String creditCardId = item.get("uuid").s();
                         String createdAt = item.get("createdAt").s();
 
-                        // Activate it
+                        // Activar tarjeta
                         Map<String, AttributeValue> keyMap = new HashMap<>();
                         keyMap.put("uuid", AttributeValue.builder().s(creditCardId).build());
                         keyMap.put("createdAt", AttributeValue.builder().s(createdAt).build());
@@ -166,10 +166,10 @@ public class cardPurchaseLambda implements RequestHandler<Map<String, Object>, M
                                 .build();
 
                         dynamoDbClient.updateItem(activateReq);
-                        context.getLogger().log("SUCCESS: Credit card " + creditCardId + " activated for user " + userId
-                                + " after 10 debit purchases.");
+                        context.getLogger().log("ÉXITO: Tarjeta de crédito " + creditCardId + " activada para el usuario " + userId
+                                + " después de 10 compras con débito.");
 
-                        // Notify activation
+                        // Notificar activación
                         if (notificationQueueUrl != null && !notificationQueueUrl.isEmpty()) {
                             String msg = String.format(
                                     "{\"type\":\"CARD.ACTIVATE\",\"data\":{\"userId\":\"%s\",\"cardId\":\"%s\",\"type\":\"CREDIT\",\"status\":\"ACTIVATED\"}}",
@@ -182,7 +182,7 @@ public class cardPurchaseLambda implements RequestHandler<Map<String, Object>, M
                 }
             }
         } catch (Exception e) {
-            context.getLogger().log("Error in auto-activation check: " + e.getMessage());
+            context.getLogger().log("Error en la verificación de auto-activación: " + e.getMessage());
         }
     }
 

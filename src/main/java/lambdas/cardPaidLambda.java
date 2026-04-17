@@ -31,7 +31,7 @@ public class cardPaidLambda implements RequestHandler<Map<String, Object>, Map<S
 
             String bodyString = (String) input.get("body");
             if (bodyString == null || bodyString.isEmpty()) {
-                return buildResponse(400, "{\"error\": \"Request body is empty\"}");
+                return buildResponse(400, "{\"error\": \"El cuerpo de la solicitud está vacío\"}");
             }
 
             Map<String, Object> body = objectMapper.readValue(bodyString, Map.class);
@@ -40,17 +40,17 @@ public class cardPaidLambda implements RequestHandler<Map<String, Object>, Map<S
             }
 
             if (cardId == null) {
-                return buildResponse(400, "{\"error\": \"Card ID is required in URL or body\"}");
+                return buildResponse(400, "{\"error\": \"El ID de la tarjeta es requerido en la URL o en el cuerpo\"}");
             }
 
             String merchant = (String) body.getOrDefault("merchant", "PSE");
             Object amountObj = body.get("amount");
             if (amountObj == null) {
-                return buildResponse(400, "{\"error\": \"amount field is missing\"}");
+                return buildResponse(400, "{\"error\": \"Falta el campo 'amount'\"}");
             }
             double amount = Double.parseDouble(amountObj.toString());
 
-            // 1. Fetch card using PK
+            // Obtener tarjeta usando la clave primaria
             QueryRequest queryRequest = QueryRequest.builder()
                     .tableName(cardTableName)
                     .keyConditionExpression("#uuid = :id")
@@ -60,7 +60,7 @@ public class cardPaidLambda implements RequestHandler<Map<String, Object>, Map<S
 
             QueryResponse queryResponse = dynamoDbClient.query(queryRequest);
             if (!queryResponse.hasItems() || queryResponse.items().isEmpty()) {
-                return buildResponse(404, "{\"error\": \"Card not found for ID: " + cardId + "\"}");
+                return buildResponse(404, "{\"error\": \"No se encontró la tarjeta con el ID: " + cardId + "\"}");
             }
 
             Map<String, AttributeValue> card = queryResponse.items().get(0);
@@ -72,12 +72,12 @@ public class cardPaidLambda implements RequestHandler<Map<String, Object>, Map<S
 
             if (!"CREDIT".equalsIgnoreCase(cardType)) {
                 return buildResponse(400,
-                        "{\"error\": \"Payment only allowed on CREDIT cards. Current card type: " + cardType + "\"}");
+                        "{\"error\": \"Solo se permiten pagos en tarjetas de CRÉDITO. Tipo actual de tarjeta: " + cardType + "\"}");
             }
 
             double newBalance = currentBalance + amount;
 
-            // 2. Update Balance
+            // Actualizar Saldo
             UpdateItemRequest updateReq = UpdateItemRequest.builder()
                     .tableName(cardTableName)
                     .key(Map.of(
@@ -89,7 +89,7 @@ public class cardPaidLambda implements RequestHandler<Map<String, Object>, Map<S
                     .build();
             dynamoDbClient.updateItem(updateReq);
 
-            // 3. Save Transaction
+            // Guardar Transacción
             String txUuid = UUID.randomUUID().toString();
             String txCreatedAt = Instant.now().toString();
             Map<String, AttributeValue> txValues = new HashMap<>();
@@ -102,7 +102,7 @@ public class cardPaidLambda implements RequestHandler<Map<String, Object>, Map<S
 
             dynamoDbClient.putItem(PutItemRequest.builder().tableName(transactionTableName).item(txValues).build());
 
-            // 4. Notify
+            // Notificar
             if (notificationQueueUrl != null && !notificationQueueUrl.isEmpty()) {
                 String payload = String.format(
                         "{\"type\":\"TRANSACTION.PAID\",\"data\":{\"date\":\"%s\",\"merchant\":\"%s\",\"cardId\":\"%s\",\"amount\":%.2f,\"userId\":\"%s\"}}",
@@ -112,11 +112,11 @@ public class cardPaidLambda implements RequestHandler<Map<String, Object>, Map<S
             }
 
             return buildResponse(200,
-                    "{\"message\": \"Payment applied successfully\", \"newBalance\": " + newBalance + "}");
+                    "{\"message\": \"Pago aplicado exitosamente\", \"newBalance\": " + newBalance + "}");
 
         } catch (Exception e) {
             context.getLogger().log("Error fatal: " + e.toString());
-            return buildResponse(500, "{\"error\": \"Internal Server Error\", \"details\": \""
+            return buildResponse(500, "{\"error\": \"Error Interno del Servidor\", \"details\": \""
                     + e.toString().replace("\"", "\\\"") + "\"}");
         }
     }

@@ -5,13 +5,13 @@ import com.amazonaws.services.lambda.runtime.RequestHandler;
 import java.util.Map;
 
 /**
- * AWS Lambda function to generate and retrieve reports (via S3).
+ * Función AWS Lambda para generar y recuperar reportes (vía S3).
  */
 public class cardReportLambda implements RequestHandler<Map<String, Object>, String> {
 
     @Override
     public String handleRequest(Map<String, Object> input, Context context) {
-        // Lambda logic to generate and upload report to S3
-        return "Report generated successfully.";
+        // Lógica de Lambda para generar y cargar el reporte en S3
+        return "Reporte generado exitosamente.";
     }
 }

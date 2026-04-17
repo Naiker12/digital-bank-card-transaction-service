@@ -28,26 +28,26 @@ public class createRequestCardLambda implements RequestHandler<SQSEvent, Void> {
     public Void handleRequest(SQSEvent event, Context context) {
         for (SQSEvent.SQSMessage message : event.getRecords()) {
             try {
-                // 1. Read SQS message data
+                // Leer datos del mensaje SQS
                 Map<String, Object> body = objectMapper.readValue(message.getBody(), Map.class);
                 String userId = (String) body.get("userId");
                 String requestType = (String) body.get("request");
 
-                context.getLogger().log("Processing card request: " + requestType + " for user: " + userId);
+                context.getLogger().log("Procesando solicitud de tarjeta: " + requestType + " para el usuario: " + userId);
 
                 if (userId == null || requestType == null) {
-                    context.getLogger().log("Invalid message: userId or request is null");
+                    context.getLogger().log("Mensaje inválido: userId o request es nulo");
                     continue;
                 }
 
-                // 2. Check for duplicate requests (Idempotency)
+                // Verificar solicitudes duplicadas (Idempotencia)
                 if (isAlreadyCreated(userId, requestType, context)) {
                     context.getLogger()
-                            .log("Card of type " + requestType + " already exists for user: " + userId + ". Skipping.");
+                            .log("La tarjeta de tipo " + requestType + " ya existe para el usuario: " + userId + ". Omitiendo.");
                     continue;
                 }
 
-                // 3. Process specific request
+                // Procesar solicitud específica
                 if ("CREDIT".equalsIgnoreCase(requestType)) {
                     createCard(userId, "CREDIT", 0.0, "PENDING", context);
                 } else if ("DEBIT".equalsIgnoreCase(requestType)) {
@@ -55,7 +55,7 @@ public class createRequestCardLambda implements RequestHandler<SQSEvent, Void> {
                 }
 
             } catch (Exception e) {
-                context.getLogger().log("Error processing SQS message: " + e.getMessage());
+                context.getLogger().log("Error al procesar el mensaje SQS: " + e.getMessage());
             }
         }
         return null;
@@ -63,7 +63,7 @@ public class createRequestCardLambda implements RequestHandler<SQSEvent, Void> {
 
     private boolean isAlreadyCreated(String userId, String type, Context context) {
         try {
-            // Searching in UserIdIndex GSI
+            // Buscando en el GSI UserIdIndex
             software.amazon.awssdk.services.dynamodb.model.QueryRequest queryRequest = software.amazon.awssdk.services.dynamodb.model.QueryRequest
                     .builder()
                     .tableName(cardTableName)
@@ -80,7 +80,7 @@ public class createRequestCardLambda implements RequestHandler<SQSEvent, Void> {
                 }
             }
         } catch (Exception e) {
-            context.getLogger().log("Error checking for existing card: " + e.getMessage());
+            context.getLogger().log("Error al verificar tarjeta existente: " + e.getMessage());
         }
         return false;
     }
@@ -102,7 +102,7 @@ public class createRequestCardLambda implements RequestHandler<SQSEvent, Void> {
 
             dynamoDbClient.putItem(PutItemRequest.builder().tableName(cardTableName).item(item).build());
 
-            // 4. Send Notification
+            // Enviar Notificación
             if (notificationQueueUrl != null && !notificationQueueUrl.isEmpty()) {
                 String payload = String.format(
                         "{\"type\":\"CARD.CREATE\",\"data\":{\"userId\":\"%s\",\"cardId\":\"%s\",\"type\":\"%s\",\"status\":\"%s\"}}",
@@ -112,10 +112,10 @@ public class createRequestCardLambda implements RequestHandler<SQSEvent, Void> {
                         .messageBody(payload).build());
             }
 
-            context.getLogger().log("Card created: " + uuid + " for user: " + userId + " type: " + type);
+            context.getLogger().log("Tarjeta creada: " + uuid + " para el usuario: " + userId + " tipo: " + type);
 
         } catch (Exception e) {
-            context.getLogger().log("Error creating card: " + e.getMessage());
+            context.getLogger().log("Error al crear la tarjeta: " + e.getMessage());
         }
     }
 

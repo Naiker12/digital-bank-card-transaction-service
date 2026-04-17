@@ -29,10 +29,9 @@ public class cardGetReportLambda implements RequestHandler<Map<String, Object>, 
             String cardId = pathParameters != null ? pathParameters.get("card_id") : null;
 
             if (cardId == null) {
-                return buildResponse(400, "{\"error\": \"Card ID is required in URL\"}");
+                return buildResponse(400, "{\"error\": \"Se requiere el ID de la tarjeta en la URL\"}");
             }
 
-            // Parse body for start/end dates if available
             String start = null;
             String end = null;
             String bodyString = (String) input.get("body");
@@ -45,7 +44,7 @@ public class cardGetReportLambda implements RequestHandler<Map<String, Object>, 
                 }
             }
 
-            // 1. Fetch transactions with date filter if applicable
+            // Obtener transacciones con filtro de fecha si aplica
             ScanRequest.Builder scanBuilder = ScanRequest.builder()
                     .tableName(transactionTableName);
 
@@ -63,7 +62,7 @@ public class cardGetReportLambda implements RequestHandler<Map<String, Object>, 
             ScanResponse scanResponse = dynamoDbClient.scan(scanBuilder.build());
             List<Map<String, AttributeValue>> transactions = scanResponse.items();
 
-            // 2. Fetch userId for notification
+            // Obtener userId para la notificación
             QueryRequest cardQuery = QueryRequest.builder()
                     .tableName(cardTableName)
                     .keyConditionExpression("#pk = :id")
@@ -79,16 +78,16 @@ public class cardGetReportLambda implements RequestHandler<Map<String, Object>, 
                         : (cardItem.containsKey("userId") ? cardItem.get("userId").s() : "unknown");
             }
 
-            // 3. Send report notification
+            // Enviar notificación de reporte
             if (notificationQueueUrl != null) {
                 String payload = String.format(
                         "{\"type\":\"REPORT.ACTIVITY\",\"data\":{\"userId\":\"%s\",\"cardId\":\"%s\",\"report\": \"%s\", \"count\": %d}}",
-                        userId, cardId, "Report generated correctly with date filters", transactions.size());
+                        userId, cardId, "Reporte generado correctamente con filtros de fecha", transactions.size());
                 sqsClient.sendMessage(
                         SendMessageRequest.builder().queueUrl(notificationQueueUrl).messageBody(payload).build());
             }
 
-            return buildResponse(200, "{\"message\": \"Report generated and sent to email\", \"transactions_count\": "
+            return buildResponse(200, "{\"message\": \"Reporte generado y enviado al correo\", \"transactions_count\": "
                     + transactions.size() + ", \"params\": {\"start\": \"" + start + "\", \"end\": \"" + end + "\"}}");
 
         } catch (Exception e) {

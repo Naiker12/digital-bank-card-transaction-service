@@ -26,13 +26,13 @@ public class transactionSaveLambda implements RequestHandler<Map<String, Object>
     @Override
     public Map<String, Object> handleRequest(Map<String, Object> input, Context context) {
         try {
-            // 1. Get card_id from path parameters or body
+            // Obtener card_id de los parámetros de ruta o del cuerpo
             Map<String, String> pathParameters = (Map<String, String>) input.get("pathParameters");
             String cardId = (pathParameters != null) ? pathParameters.get("card_id") : null;
 
             String bodyString = (String) input.get("body");
             if (bodyString == null || bodyString.isEmpty()) {
-                return buildResponse(400, "{\"error\": \"Request body is empty\"}");
+                return buildResponse(400, "{\"error\": \"El cuerpo de la solicitud está vacío\"}");
             }
 
             Map<String, Object> body = objectMapper.readValue(bodyString, Map.class);
@@ -42,17 +42,17 @@ public class transactionSaveLambda implements RequestHandler<Map<String, Object>
             }
 
             if (cardId == null) {
-                return buildResponse(400, "{\"error\": \"Card ID is required in URL or body\"}");
+                return buildResponse(400, "{\"error\": \"El ID de la tarjeta es requerido en la URL o en el cuerpo\"}");
             }
 
             Object amountObj = body.get("amount");
             if (amountObj == null) {
-                return buildResponse(400, "{\"error\": \"Amount is required\"}");
+                return buildResponse(400, "{\"error\": \"El monto es requerido\"}");
             }
             double amount = Double.parseDouble(amountObj.toString());
             String merchant = (String) body.getOrDefault("merchant", "SAVING");
 
-            // 2. Fetch card using Query
+            // Obtener tarjeta usando Query
             QueryRequest queryRequest = QueryRequest.builder()
                     .tableName(cardTableName)
                     .keyConditionExpression("#uuid = :id")
@@ -62,7 +62,7 @@ public class transactionSaveLambda implements RequestHandler<Map<String, Object>
 
             QueryResponse queryResponse = dynamoDbClient.query(queryRequest);
             if (!queryResponse.hasItems() || queryResponse.items().isEmpty()) {
-                return buildResponse(404, "{\"error\": \"Card not found for ID: " + cardId + "\"}");
+                return buildResponse(404, "{\"error\": \"No se encontró la tarjeta para el ID: " + cardId + "\"}");
             }
 
             Map<String, AttributeValue> card = queryResponse.items().get(0);
@@ -73,7 +73,7 @@ public class transactionSaveLambda implements RequestHandler<Map<String, Object>
 
             double newBalance = currentBalance + amount;
 
-            // 3. Update Balance
+            // Actualizar Saldo
             UpdateItemRequest updateReq = UpdateItemRequest.builder()
                     .tableName(cardTableName)
                     .key(Map.of(
@@ -85,7 +85,7 @@ public class transactionSaveLambda implements RequestHandler<Map<String, Object>
                     .build();
             dynamoDbClient.updateItem(updateReq);
 
-            // 4. Save Transaction
+            // Guardar Transacción
             String txUuid = UUID.randomUUID().toString();
             String txCreatedAt = Instant.now().toString();
             Map<String, AttributeValue> txValues = new HashMap<>();
@@ -98,7 +98,7 @@ public class transactionSaveLambda implements RequestHandler<Map<String, Object>
 
             dynamoDbClient.putItem(PutItemRequest.builder().tableName(transactionTableName).item(txValues).build());
 
-            // 5. Notify
+            // Notificar
             if (notificationQueueUrl != null && !notificationQueueUrl.isEmpty()) {
                 String payload = String.format(
                         "{\"type\":\"TRANSACTION.SAVE\",\"data\":{\"date\":\"%s\",\"merchant\":\"%s\",\"cardId\":\"%s\",\"amount\":%.2f,\"userId\":\"%s\"}}",
@@ -107,12 +107,12 @@ public class transactionSaveLambda implements RequestHandler<Map<String, Object>
                         SendMessageRequest.builder().queueUrl(notificationQueueUrl).messageBody(payload).build());
             }
 
-            return buildResponse(200, "{\"message\": \"Deposit successful\", \"newBalance\": " + newBalance + "}");
+            return buildResponse(200, "{\"message\": \"Depósito exitoso\", \"newBalance\": " + newBalance + "}");
 
         } catch (Exception e) {
             context.getLogger().log("Error fatal: " + e.getMessage());
             return buildResponse(500,
-                    "{\"error\": \"Internal Server Error\", \"details\": \"" + e.getMessage() + "\"}");
+                    "{\"error\": \"Error Interno del Servidor\", \"details\": \"" + e.getMessage() + "\"}");
         }
     }
 

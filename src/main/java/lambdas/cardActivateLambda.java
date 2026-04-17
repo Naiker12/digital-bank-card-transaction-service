@@ -29,7 +29,7 @@ public class cardActivateLambda implements RequestHandler<Map<String, Object>, M
                 try {
                         String bodyString = (String) input.get("body");
                         if (bodyString == null || bodyString.isEmpty()) {
-                                return buildResponse(400, "{\"error\": \"Request body is empty\"}");
+                                return buildResponse(400, "{\"error\": \"El cuerpo de la solicitud está vacío\"}");
                         }
 
                         Map<String, Object> body = objectMapper.readValue(bodyString, Map.class);
@@ -44,7 +44,7 @@ public class cardActivateLambda implements RequestHandler<Map<String, Object>, M
                         Map<String, AttributeValue> cardToActivate = null;
 
                         if (cardId != null) {
-                                // Find specific card by cardId
+                                // Buscar tarjeta específica por cardId
                                 QueryRequest queryReq = QueryRequest.builder()
                                                 .tableName(cardTableName)
                                                 .keyConditionExpression("#u = :id")
@@ -57,7 +57,7 @@ public class cardActivateLambda implements RequestHandler<Map<String, Object>, M
                                         cardToActivate = queryRes.items().get(0);
                                 }
                         } else {
-                                // Find PENDING credit card for the user
+                                // Buscar tarjeta de crédito PENDIENTE para el usuario
                                 ScanRequest scanReq = ScanRequest.builder()
                                                 .tableName(cardTableName)
                                                 .filterExpression("user_id = :uid AND #t = :type AND #s = :status")
@@ -84,7 +84,7 @@ public class cardActivateLambda implements RequestHandler<Map<String, Object>, M
                                         : userId;
                         String createdAt = cardToActivate.get("createdAt").s();
 
-                        // 1. Get debit cards for the user to count transactions
+                        // Obtener tarjetas de débito del usuario para contar transacciones
                         ScanRequest debitCardsReq = ScanRequest.builder()
                                         .tableName(cardTableName)
                                         .filterExpression("user_id = :uid AND #t = :type")
@@ -101,10 +101,10 @@ public class cardActivateLambda implements RequestHandler<Map<String, Object>, M
 
                         if (debitCardIds.isEmpty()) {
                                 return buildResponse(400,
-                                                "{\"error\": \"User must have a debit card with transactions to activate credit card\"}");
+                                                "{\"error\": \"El usuario debe tener una tarjeta de débito con transacciones para activar la tarjeta de crédito\"}");
                         }
 
-                        // 2. Count PURCHASE transactions for those debit cards
+                        // Contar transacciones de tipo PURCHASE para esas tarjetas de débito
                         int totalPurchases = 0;
                         for (String dCardId : debitCardIds) {
                                 ScanRequest txScan = ScanRequest.builder()
@@ -127,7 +127,7 @@ public class cardActivateLambda implements RequestHandler<Map<String, Object>, M
                                                                 totalPurchases));
                         }
 
-                        // Update status to ACTIVATED
+                        // Actualizar estado a ACTIVATED
                         UpdateItemRequest updateReq = UpdateItemRequest.builder()
                                         .tableName(cardTableName)
                                         .key(Map.of(
@@ -151,7 +151,7 @@ public class cardActivateLambda implements RequestHandler<Map<String, Object>, M
                         }
 
                         return buildResponse(200,
-                                        "{\"message\": \"Card activated successfully. Status: ACTIVATED\", \"cardId\": \""
+                                        "{\"message\": \"Tarjeta activada exitosamente. Estado: ACTIVATED\", \"cardId\": \""
                                                         + activeCardId
                                                         + "\", \"status\": \"ACTIVATED\", \"totalDebitPurchases\": "
                                                         + totalPurchases + "}");
@@ -160,7 +160,7 @@ public class cardActivateLambda implements RequestHandler<Map<String, Object>, M
                         context.getLogger().log("Error fatal: " + e.toString());
                         String errorMsg = e.getMessage() != null ? e.getMessage() : e.toString();
                         return buildResponse(500,
-                                        "{\"error\": \"Internal Server Error\", \"details\": \""
+                                        "{\"error\": \"Error Interno del Servidor\", \"details\": \""
                                                         + errorMsg.replace("\"", "\\\"") + "\"}");
                 }
         }

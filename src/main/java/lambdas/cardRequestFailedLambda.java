@@ -5,13 +5,13 @@ import com.amazonaws.services.lambda.runtime.RequestHandler;
 import java.util.Map;
 
 /**
- * AWS Lambda function to handle failures in card requests.
+ * Función AWS Lambda para manejar fallos en las solicitudes de tarjetas.
  */
 public class cardRequestFailedLambda implements RequestHandler<Map<String, Object>, String> {
 
     @Override
     public String handleRequest(Map<String, Object> input, Context context) {
-        // Lambda logic to handle and log a failed card request
-        return "Failed request handled.";
+        // Lógica de Lambda para manejar y registrar una solicitud de tarjeta fallida
+        return "Solicitud fallida manejada.";
     }
 }
