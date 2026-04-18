@@ -1,8 +1,0 @@
-lambdas\cardGetReportLambda.class
-lambdas\createRequestCardLambda.class
-lambdas\cardReportLambda.class
-lambdas\cardRequestFailedLambda.class
-lambdas\cardPurchaseLambda.class
-lambdas\transactionSaveLambda.class
-lambdas\cardPaidLambda.class
-lambdas\cardActivateLambda.class
