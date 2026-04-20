@@ -2,6 +2,16 @@
 
 Este es el repositorio central para la gestión de tarjetas bancarias y el procesamiento de transacciones. El servicio gestiona el ciclo de vida completo de la tarjeta, desde la solicitud y activación hasta la validación de compras y el procesamiento de pagos.
 
+## 📋 Resumen de Arquitectura
+
+Siguiendo la **Guía Definitiva de Arquitectura EDA**, este servicio se integra de la siguiente manera:
+
+| Servicio | Rol Principal | Tecnología | Enlace con Datos |
+|---|---|---|---|
+| **Card Transaction** | Core Bancario / Débito | Java / Spring Boot | DynamoDB (Tarjetas) |
+| **Payment Service** | API Gateway / Orquestador | Python / Lambda | Redis (Catálogo) / DynamoDB (Pagos) |
+| **Notification Service** | Procesador de Colas (Workers) | Python / Lambda | SQS (start, check, transaction) |
+
 ## Responsabilidades del Servicio
 
 El sistema está diseñado para manejar las siguientes funcionalidades críticas:
