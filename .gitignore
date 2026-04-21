@@ -40,7 +40,8 @@ certs/
 Thumbs.db
 
 # Infraestructura como Código: Terraform
-terraform/
+# La carpeta terraform/ SÍ se sube al repo (contiene los .tf)
+# Solo se ignoran los archivos generados/transitorios:
 .terraform/
 *.tfstate
 *.tfstate.*
