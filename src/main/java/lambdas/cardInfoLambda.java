@@ -8,11 +8,7 @@ import software.amazon.awssdk.services.dynamodb.model.*;
 import java.util.HashMap;
 import java.util.Map;
 
-/**
- * Lambda para obtener la información de una tarjeta por su ID.
- * Utilizada por el Payment Service para validar tarjetas y consultar saldos.
- * Ruta: GET /card/info/{card_id}
- */
+
 public class cardInfoLambda implements RequestHandler<Map<String, Object>, Map<String, Object>> {
 
     private final DynamoDbClient dynamoDbClient = DynamoDbClient.create();
@@ -28,7 +24,6 @@ public class cardInfoLambda implements RequestHandler<Map<String, Object>, Map<S
                 return buildResponse(400, "{\"error\": \"Se requiere el ID de la tarjeta en la URL\"}");
             }
 
-            // Consultar tarjeta por uuid (partition key)
             QueryRequest queryRequest = QueryRequest.builder()
                     .tableName(cardTableName)
                     .keyConditionExpression("#pk = :id")
@@ -44,7 +39,6 @@ public class cardInfoLambda implements RequestHandler<Map<String, Object>, Map<S
 
             Map<String, AttributeValue> card = queryResponse.items().get(0);
 
-            // Construir respuesta con los datos de la tarjeta
             String userId = card.containsKey("user_id") ? card.get("user_id").s()
                     : (card.containsKey("userId") ? card.get("userId").s() : "unknown");
             String balance = card.containsKey("balance") ? card.get("balance").n() : "0";

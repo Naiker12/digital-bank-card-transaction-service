@@ -28,7 +28,7 @@ public class createRequestCardLambda implements RequestHandler<SQSEvent, Void> {
     public Void handleRequest(SQSEvent event, Context context) {
         for (SQSEvent.SQSMessage message : event.getRecords()) {
             try {
-                // Leer datos del mensaje SQS
+
                 Map<String, Object> body = objectMapper.readValue(message.getBody(), Map.class);
                 String userId = (String) body.get("userId");
                 String requestType = (String) body.get("request");
@@ -40,14 +40,12 @@ public class createRequestCardLambda implements RequestHandler<SQSEvent, Void> {
                     continue;
                 }
 
-                // Verificar solicitudes duplicadas (Idempotencia)
                 if (isAlreadyCreated(userId, requestType, context)) {
                     context.getLogger()
                             .log("La tarjeta de tipo " + requestType + " ya existe para el usuario: " + userId + ". Omitiendo.");
                     continue;
                 }
 
-                // Procesar solicitud específica
                 if ("CREDIT".equalsIgnoreCase(requestType)) {
                     createCard(userId, "CREDIT", 0.0, "PENDING", context);
                 } else if ("DEBIT".equalsIgnoreCase(requestType)) {
@@ -63,7 +61,7 @@ public class createRequestCardLambda implements RequestHandler<SQSEvent, Void> {
 
     private boolean isAlreadyCreated(String userId, String type, Context context) {
         try {
-            // Buscando en el GSI UserIdIndex
+
             software.amazon.awssdk.services.dynamodb.model.QueryRequest queryRequest = software.amazon.awssdk.services.dynamodb.model.QueryRequest
                     .builder()
                     .tableName(cardTableName)
@@ -102,7 +100,6 @@ public class createRequestCardLambda implements RequestHandler<SQSEvent, Void> {
 
             dynamoDbClient.putItem(PutItemRequest.builder().tableName(cardTableName).item(item).build());
 
-            // Enviar Notificación
             if (notificationQueueUrl != null && !notificationQueueUrl.isEmpty()) {
                 String payload = String.format(
                         "{\"type\":\"CARD.CREATE\",\"data\":{\"userId\":\"%s\",\"cardId\":\"%s\",\"type\":\"%s\",\"status\":\"%s\"}}",

@@ -12,11 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-/**
- * Lambda para obtener todas las tarjetas de un usuario.
- * Utiliza el GSI UserIdIndex para filtrar por user_id.
- * Ruta: GET /card/user/{user_id}
- */
+
 public class getUserCardsLambda implements RequestHandler<Map<String, Object>, Map<String, Object>> {
 
     private final DynamoDbClient dynamoDbClient = DynamoDbClient.create();
@@ -35,7 +31,6 @@ public class getUserCardsLambda implements RequestHandler<Map<String, Object>, M
 
             context.getLogger().log("Buscando tarjetas para el usuario: " + userId);
 
-            // Consultar tarjetas usando el GSI 'UserIdIndex'
             QueryRequest queryRequest = QueryRequest.builder()
                     .tableName(cardTableName)
                     .indexName("UserIdIndex")
@@ -48,7 +43,7 @@ public class getUserCardsLambda implements RequestHandler<Map<String, Object>, M
 
             for (Map<String, AttributeValue> item : queryResponse.items()) {
                 Map<String, Object> cardMap = new HashMap<>();
-                // Normalizar nombres de campos para el frontend
+
                 cardMap.put("uuid", item.get("uuid").s());
                 cardMap.put("user_id", item.containsKey("user_id") ? item.get("user_id").s() : userId);
                 cardMap.put("cardNumber", item.containsKey("cardNumber") ? item.get("cardNumber").s() : "****");

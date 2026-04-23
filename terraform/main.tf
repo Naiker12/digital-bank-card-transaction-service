@@ -371,7 +371,6 @@ resource "aws_lambda_permission" "api_gw_user_cards" {
   source_arn    = "${aws_apigatewayv2_api.card_api.execution_arn}/*/*"
 }
 
-# ── Card Info (usado por Payment Service) ────────────────────────────────
 
 resource "aws_lambda_function" "card_info" {
   filename         = local.jar_path
@@ -418,7 +417,6 @@ resource "aws_lambda_event_source_mapping" "sqs_create_card" {
   function_name    = aws_lambda_function.create_card.arn
 }
 
-# --- IAM Roles and Policies ---
 
 resource "aws_iam_role" "lambda_role" {
   name = "bank-card-service-role"
@@ -465,7 +463,6 @@ resource "aws_iam_role_policy_attachment" "attach_access" {
   policy_arn = aws_iam_policy.lambda_access.arn
 }
 
-# --- Outputs ---
 
 output "card_table_name" {
   value = aws_dynamodb_table.card_table.name

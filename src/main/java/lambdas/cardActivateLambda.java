@@ -44,7 +44,7 @@ public class cardActivateLambda implements RequestHandler<Map<String, Object>, M
                         Map<String, AttributeValue> cardToActivate = null;
 
                         if (cardId != null) {
-                                // Buscar tarjeta específica por ID de tarjeta (cardId)
+
                                 QueryRequest queryReq = QueryRequest.builder()
                                                 .tableName(cardTableName)
                                                 .keyConditionExpression("#u = :id")
@@ -57,7 +57,7 @@ public class cardActivateLambda implements RequestHandler<Map<String, Object>, M
                                         cardToActivate = queryRes.items().get(0);
                                 }
                         } else {
-                                // Buscar tarjeta de crédito PENDIENTE para el usuario en estado PENDING
+
                                 ScanRequest scanReq = ScanRequest.builder()
                                                 .tableName(cardTableName)
                                                 .filterExpression("user_id = :uid AND #t = :type AND #s = :status")
@@ -84,7 +84,6 @@ public class cardActivateLambda implements RequestHandler<Map<String, Object>, M
                                         : userId;
                         String createdAt = cardToActivate.get("createdAt").s();
 
-                        // Obtener tarjetas de débito del usuario para realizar el conteo de transacciones
                         ScanRequest debitCardsReq = ScanRequest.builder()
                                         .tableName(cardTableName)
                                         .filterExpression("user_id = :uid AND #t = :type")
@@ -104,7 +103,6 @@ public class cardActivateLambda implements RequestHandler<Map<String, Object>, M
                                                 "{\"error\": \"El usuario debe tener una tarjeta de débito con transacciones para activar la tarjeta de crédito\"}");
                         }
 
-                        // Contar transacciones de tipo PURCHASE (COMPRA) para esas tarjetas de débito encontradas
                         int totalPurchases = 0;
                         for (String dCardId : debitCardIds) {
                                 ScanRequest txScan = ScanRequest.builder()
@@ -127,7 +125,6 @@ public class cardActivateLambda implements RequestHandler<Map<String, Object>, M
                                                                 totalPurchases));
                         }
 
-                        // Actualizar estado de la tarjeta a ACTIVATED (ACTIVADA)
                         UpdateItemRequest updateReq = UpdateItemRequest.builder()
                                         .tableName(cardTableName)
                                         .key(Map.of(

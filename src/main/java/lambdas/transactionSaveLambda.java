@@ -26,7 +26,7 @@ public class transactionSaveLambda implements RequestHandler<Map<String, Object>
     @Override
     public Map<String, Object> handleRequest(Map<String, Object> input, Context context) {
         try {
-            // Obtener card_id de los parámetros de ruta o del cuerpo
+
             Map<String, String> pathParameters = (Map<String, String>) input.get("pathParameters");
             String cardId = (pathParameters != null) ? pathParameters.get("card_id") : null;
 
@@ -52,7 +52,6 @@ public class transactionSaveLambda implements RequestHandler<Map<String, Object>
             double amount = Double.parseDouble(amountObj.toString());
             String merchant = (String) body.getOrDefault("merchant", "SAVING");
 
-            // Obtener tarjeta usando Query
             QueryRequest queryRequest = QueryRequest.builder()
                     .tableName(cardTableName)
                     .keyConditionExpression("#uuid = :id")
@@ -73,7 +72,6 @@ public class transactionSaveLambda implements RequestHandler<Map<String, Object>
 
             double newBalance = currentBalance + amount;
 
-            // Actualizar Saldo
             UpdateItemRequest updateReq = UpdateItemRequest.builder()
                     .tableName(cardTableName)
                     .key(Map.of(
@@ -85,7 +83,6 @@ public class transactionSaveLambda implements RequestHandler<Map<String, Object>
                     .build();
             dynamoDbClient.updateItem(updateReq);
 
-            // Guardar Transacción
             String txUuid = UUID.randomUUID().toString();
             String txCreatedAt = Instant.now().toString();
             Map<String, AttributeValue> txValues = new HashMap<>();
@@ -98,7 +95,6 @@ public class transactionSaveLambda implements RequestHandler<Map<String, Object>
 
             dynamoDbClient.putItem(PutItemRequest.builder().tableName(transactionTableName).item(txValues).build());
 
-            // Notificar
             if (notificationQueueUrl != null && !notificationQueueUrl.isEmpty()) {
                 String payload = String.format(
                         "{\"type\":\"TRANSACTION.SAVE\",\"data\":{\"date\":\"%s\",\"merchant\":\"%s\",\"cardId\":\"%s\",\"amount\":%.2f,\"userId\":\"%s\"}}",
