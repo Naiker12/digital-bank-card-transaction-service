@@ -76,6 +76,20 @@ resource "aws_s3_bucket" "transactions_reports" {
   tags          = local.common_tags
 }
 
+resource "aws_s3_bucket" "catalog_services" {
+  bucket        = "catalog-services-bucket-${random_id.bucket_suffix.hex}"
+  force_destroy = true
+  tags          = local.common_tags
+}
+
+resource "aws_s3_object" "catalog_seed" {
+  bucket       = aws_s3_bucket.catalog_services.id
+  key          = "servicios.csv"
+  source       = "${path.module}/../servicios.csv"
+  content_type = "text/csv"
+  etag         = filemd5("${path.module}/../servicios.csv")
+}
+
 
 resource "aws_sqs_queue" "create_card_dlq" {
   name = "error-create-request-card-sqs"
@@ -243,6 +257,26 @@ resource "aws_lambda_function" "get_user_cards" {
   }
 }
 
+resource "aws_lambda_function" "catalog" {
+  filename         = local.jar_path
+  function_name    = "catalog-lambda"
+  role             = aws_iam_role.lambda_role.arn
+  handler          = "lambdas.catalogLambda::handleRequest"
+  runtime          = "java17"
+  memory_size      = 512
+  timeout          = 30
+  source_code_hash = local.jar_hash
+
+  environment {
+    variables = {
+      CATALOG_BUCKET_NAME = aws_s3_bucket.catalog_services.id
+      CATALOG_FILE_KEY    = aws_s3_object.catalog_seed.key
+    }
+  }
+
+  tags = local.common_tags
+}
+
 
 resource "aws_apigatewayv2_integration" "activate_card" {
   api_id           = aws_apigatewayv2_api.card_api.id
@@ -323,6 +357,31 @@ resource "aws_apigatewayv2_route" "legacy_get_user_cards_route" {
 }
 
 
+resource "aws_apigatewayv2_integration" "catalog" {
+  api_id           = aws_apigatewayv2_api.card_api.id
+  integration_type = "AWS_PROXY"
+  integration_uri  = aws_lambda_function.catalog.invoke_arn
+}
+
+resource "aws_apigatewayv2_route" "catalog_get_route" {
+  api_id    = aws_apigatewayv2_api.card_api.id
+  route_key = "GET /catalog"
+  target    = "integrations/${aws_apigatewayv2_integration.catalog.id}"
+}
+
+resource "aws_apigatewayv2_route" "catalog_post_route" {
+  api_id    = aws_apigatewayv2_api.card_api.id
+  route_key = "POST /catalog"
+  target    = "integrations/${aws_apigatewayv2_integration.catalog.id}"
+}
+
+resource "aws_apigatewayv2_route" "catalog_update_route" {
+  api_id    = aws_apigatewayv2_api.card_api.id
+  route_key = "POST /catalog/update"
+  target    = "integrations/${aws_apigatewayv2_integration.catalog.id}"
+}
+
+
 resource "aws_lambda_permission" "api_gw_activate" {
   statement_id  = "AllowExecutionFromAPIGatewayActivate"
   action        = "lambda:InvokeFunction"
@@ -367,6 +426,14 @@ resource "aws_lambda_permission" "api_gw_user_cards" {
   statement_id  = "AllowAPIGwUserCards"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.get_user_cards.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.card_api.execution_arn}/*/*"
+}
+
+resource "aws_lambda_permission" "api_gw_catalog" {
+  statement_id  = "AllowAPIGwCatalog"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.catalog.function_name
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_apigatewayv2_api.card_api.execution_arn}/*/*"
 }
@@ -478,6 +545,10 @@ output "create_card_queue_url" {
 
 output "transactions_report_bucket" {
   value = aws_s3_bucket.transactions_reports.id
+}
+
+output "catalog_services_bucket" {
+  value = aws_s3_bucket.catalog_services.id
 }
 
 output "api_base_url" {

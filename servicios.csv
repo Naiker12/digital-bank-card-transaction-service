@@ -1,0 +1,21 @@
+ID,Categoria,Proveedor,Servicio,Plan,Precio Mensual (US$),Velocidad/Detalles,Estado
+1,Energía,Empresa Eléctrica Nacional,Luz Residencial,Básico,45.00,150 kWh incluidos,Activo
+2,Energía,Empresa Eléctrica Nacional,Luz Residencial,Premium,75.00,300 kWh incluidos,Activo
+3,Agua,Acueducto Municipal,Agua Potable,Estándar,25.00,20 m³ incluidos,Activo
+4,Internet,Tigo,Internet Hogar,Básico,89.90,100 Mbps,Activo
+5,Internet,Tigo,Internet Hogar,Avanzado,129.90,200 Mbps,Activo
+6,Internet,Movistar,Fibra Óptica,Essential,79.90,120 Mbps,Activo
+7,Internet,Movistar,Fibra Óptica,Plus,119.90,250 Mbps,Activo
+8,Internet,Claro,Internet Hogar,Básico,85.00,100 Mbps,Activo
+9,Internet,Claro,Internet Hogar,Full,135.00,300 Mbps,Activo
+10,Telefonía,Tigo,Pospago,Control,45.00,3 GB + Minutos Ilimitados,Activo
+11,Telefonía,Tigo,Pospago,Max,85.00,10 GB + Minutos Ilimitados,Activo
+12,Telefonía,Movistar,Pospago,Básico,40.00,2 GB + Minutos Ilimitados,Activo
+13,Telefonía,Movistar,Pospago,Premium,90.00,15 GB + Minutos Ilimitados,Activo
+14,Telefonía,Claro,Pospago,Económico,35.00,1.5 GB + Minutos Ilimitados,Activo
+15,Telefonía,Claro,Pospago,Total,95.00,20 GB + Minutos Ilimitados,Activo
+16,TV,Tigo,TV Digital,Básico,59.90,80 canales,Activo
+17,TV,Tigo,TV Digital,Ultra,99.90,150 canales + HD,Activo
+18,TV,Claro,TV Cable,Estándar,65.00,100 canales,Activo
+19,TV,Claro,TV Cable,Premium,110.00,200 canales + HD,Activo
+20,Paquete,Tigo,Triple Play,Hogar,199.90,Internet + TV + Teléfono,Activo
