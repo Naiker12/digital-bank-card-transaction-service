@@ -97,6 +97,7 @@ public class createRequestCardLambda implements RequestHandler<SQSEvent, Void> {
             item.put("balance", AttributeValue.builder().n(String.valueOf(balance)).build());
             item.put("status", AttributeValue.builder().s(status).build());
             item.put("cardNumber", AttributeValue.builder().s(cardNumber).build());
+            item.put("purchaseCount", AttributeValue.builder().n("0").build());
 
             dynamoDbClient.putItem(PutItemRequest.builder().tableName(cardTableName).item(item).build());
 

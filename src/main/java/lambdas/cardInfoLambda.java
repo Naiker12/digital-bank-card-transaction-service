@@ -45,10 +45,11 @@ public class cardInfoLambda implements RequestHandler<Map<String, Object>, Map<S
             String type = card.containsKey("type") ? card.get("type").s() : "DEBIT";
             String status = card.containsKey("status") ? card.get("status").s() : "UNKNOWN";
             String cardNumber = card.containsKey("cardNumber") ? card.get("cardNumber").s() : "";
+            String purchaseCount = card.containsKey("purchaseCount") ? card.get("purchaseCount").n() : "0";
 
             String responseBody = String.format(
-                    "{\"uuid\":\"%s\",\"userId\":\"%s\",\"balance\":%s,\"type\":\"%s\",\"status\":\"%s\",\"cardNumber\":\"%s\"}",
-                    cardId, userId, balance, type, status, cardNumber);
+                    "{\"uuid\":\"%s\",\"userId\":\"%s\",\"balance\":%s,\"type\":\"%s\",\"status\":\"%s\",\"cardNumber\":\"%s\",\"purchaseCount\":%s}",
+                    cardId, userId, balance, type, status, cardNumber, purchaseCount);
 
             return buildResponse(200, responseBody);
 

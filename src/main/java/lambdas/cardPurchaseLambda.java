@@ -3,7 +3,13 @@ package lambdas;
 import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
-import software.amazon.awssdk.services.dynamodb.model.*;
+import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
+import software.amazon.awssdk.services.dynamodb.model.PutItemRequest;
+import software.amazon.awssdk.services.dynamodb.model.QueryRequest;
+import software.amazon.awssdk.services.dynamodb.model.QueryResponse;
+import software.amazon.awssdk.services.dynamodb.model.ReturnValue;
+import software.amazon.awssdk.services.dynamodb.model.UpdateItemRequest;
+import software.amazon.awssdk.services.dynamodb.model.UpdateItemResponse;
 import software.amazon.awssdk.services.sqs.SqsClient;
 import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -25,7 +31,6 @@ public class cardPurchaseLambda implements RequestHandler<Map<String, Object>, M
 
     @Override
     public Map<String, Object> handleRequest(Map<String, Object> input, Context context) {
-        Map<String, Object> response = new HashMap<>();
         try {
             String bodyString = (String) input.get("body");
             Map<String, Object> body = objectMapper.readValue(bodyString, Map.class);
@@ -52,6 +57,9 @@ public class cardPurchaseLambda implements RequestHandler<Map<String, Object>, M
             String userId = card.containsKey("user_id") ? card.get("user_id").s()
                     : (card.containsKey("userId") ? card.get("userId").s() : "unknown");
             double balance = Double.parseDouble(card.get("balance").n());
+            int currentPurchaseCount = card.containsKey("purchaseCount")
+                    ? Integer.parseInt(card.get("purchaseCount").n())
+                    : 0;
 
             if ("DEBIT".equalsIgnoreCase(cardType)) {
                 if (balance < amount) {
@@ -59,7 +67,6 @@ public class cardPurchaseLambda implements RequestHandler<Map<String, Object>, M
                 }
                 balance -= amount;
             } else if ("CREDIT".equalsIgnoreCase(cardType)) {
-
                 if (balance < amount) {
                     return buildResponse(400, "{\"error\": \"Límite de crédito excedido\"}");
                 }
@@ -70,14 +77,30 @@ public class cardPurchaseLambda implements RequestHandler<Map<String, Object>, M
             keyMap.put("uuid", AttributeValue.builder().s(cardId).build());
             keyMap.put("createdAt", AttributeValue.builder().s(createdAt).build());
 
-            UpdateItemRequest updateReq = UpdateItemRequest.builder()
+            UpdateItemRequest.Builder updateBuilder = UpdateItemRequest.builder()
                     .tableName(cardTableName)
                     .key(keyMap)
                     .updateExpression("SET balance = :b")
                     .expressionAttributeValues(
                             Map.of(":b", AttributeValue.builder().n(String.valueOf(balance)).build()))
-                    .build();
-            dynamoDbClient.updateItem(updateReq);
+                    .returnValues(ReturnValue.UPDATED_NEW);
+
+            int updatedPurchaseCount = currentPurchaseCount;
+            if ("DEBIT".equalsIgnoreCase(cardType)) {
+                updateBuilder.updateExpression("SET balance = :b, purchaseCount = if_not_exists(purchaseCount, :zero) + :inc")
+                        .expressionAttributeValues(
+                                Map.of(
+                                        ":b", AttributeValue.builder().n(String.valueOf(balance)).build(),
+                                        ":zero", AttributeValue.builder().n("0").build(),
+                                        ":inc", AttributeValue.builder().n("1").build()));
+            }
+
+            UpdateItemResponse updateResponse = dynamoDbClient.updateItem(updateBuilder.build());
+            if ("DEBIT".equalsIgnoreCase(cardType)) {
+                updatedPurchaseCount = updateResponse.attributes().containsKey("purchaseCount")
+                        ? Integer.parseInt(updateResponse.attributes().get("purchaseCount").n())
+                        : currentPurchaseCount + 1;
+            }
 
             String txUuid = UUID.randomUUID().toString();
             String txCreatedAt = Instant.now().toString();
@@ -99,8 +122,8 @@ public class cardPurchaseLambda implements RequestHandler<Map<String, Object>, M
                         SendMessageRequest.builder().queueUrl(notificationQueueUrl).messageBody(payload).build());
             }
 
-            if ("DEBIT".equalsIgnoreCase(cardType)) {
-                checkAndActivateCredit(userId, cardId, context);
+            if ("DEBIT".equalsIgnoreCase(cardType) && updatedPurchaseCount >= 10) {
+                checkAndActivateCredit(userId, context);
             }
 
             return buildResponse(200, "{\"message\": \"Compra exitosa\", \"remainingBalance\": " + balance + "}");
@@ -111,66 +134,48 @@ public class cardPurchaseLambda implements RequestHandler<Map<String, Object>, M
         }
     }
 
-    private void checkAndActivateCredit(String userId, String cardId, Context context) {
+    private void checkAndActivateCredit(String userId, Context context) {
         try {
-
-            software.amazon.awssdk.services.dynamodb.model.QueryRequest txQuery = software.amazon.awssdk.services.dynamodb.model.QueryRequest
-                    .builder()
-                    .tableName(transactionTableName)
-                    .indexName("CardIdIndex")
-                    .keyConditionExpression("cardId = :id")
-                    .expressionAttributeValues(Map.of(":id", AttributeValue.builder().s(cardId).build()))
-                    .select(Select.COUNT)
+            QueryRequest cardQuery = QueryRequest.builder()
+                    .tableName(cardTableName)
+                    .indexName("UserIdIndex")
+                    .keyConditionExpression("user_id = :u")
+                    .expressionAttributeValues(Map.of(":u", AttributeValue.builder().s(userId).build()))
                     .build();
 
-            int txCount = dynamoDbClient.query(txQuery).count();
-            context.getLogger().log("Conteo actual de transacciones DEBIT para el usuario " + userId + ": " + txCount);
+            QueryResponse cardResponse = dynamoDbClient.query(cardQuery);
+            for (Map<String, AttributeValue> item : cardResponse.items()) {
+                if (item.containsKey("type") && item.get("type").s().equalsIgnoreCase("CREDIT")
+                        && item.containsKey("status") && item.get("status").s().equalsIgnoreCase("PENDING")) {
 
-            if (txCount >= 10) {
+                    String creditCardId = item.get("uuid").s();
+                    String createdAt = item.get("createdAt").s();
 
-                software.amazon.awssdk.services.dynamodb.model.QueryRequest cardQuery = software.amazon.awssdk.services.dynamodb.model.QueryRequest
-                        .builder()
-                        .tableName(cardTableName)
-                        .indexName("UserIdIndex")
-                        .keyConditionExpression("user_id = :u")
-                        .expressionAttributeValues(Map.of(":u", AttributeValue.builder().s(userId).build()))
-                        .build();
+                    Map<String, AttributeValue> keyMap = new HashMap<>();
+                    keyMap.put("uuid", AttributeValue.builder().s(creditCardId).build());
+                    keyMap.put("createdAt", AttributeValue.builder().s(createdAt).build());
 
-                software.amazon.awssdk.services.dynamodb.model.QueryResponse cardResponse = dynamoDbClient
-                        .query(cardQuery);
-                for (Map<String, AttributeValue> item : cardResponse.items()) {
-                    if (item.containsKey("type") && item.get("type").s().equalsIgnoreCase("CREDIT") &&
-                            item.containsKey("status") && item.get("status").s().equalsIgnoreCase("PENDING")) {
+                    UpdateItemRequest activateReq = UpdateItemRequest.builder()
+                            .tableName(cardTableName)
+                            .key(keyMap)
+                            .updateExpression("SET #s = :a")
+                            .expressionAttributeNames(Map.of("#s", "status"))
+                            .expressionAttributeValues(
+                                    Map.of(":a", AttributeValue.builder().s("ACTIVATED").build()))
+                            .build();
 
-                        String creditCardId = item.get("uuid").s();
-                        String createdAt = item.get("createdAt").s();
+                    dynamoDbClient.updateItem(activateReq);
+                    context.getLogger().log("ÉXITO: Tarjeta de crédito " + creditCardId + " activada para el usuario " + userId
+                            + " después de 10 compras con débito.");
 
-                        Map<String, AttributeValue> keyMap = new HashMap<>();
-                        keyMap.put("uuid", AttributeValue.builder().s(creditCardId).build());
-                        keyMap.put("createdAt", AttributeValue.builder().s(createdAt).build());
-
-                        UpdateItemRequest activateReq = UpdateItemRequest.builder()
-                                .tableName(cardTableName)
-                                .key(keyMap)
-                                .updateExpression("SET #s = :a")
-                                .expressionAttributeNames(Map.of("#s", "status"))
-                                .expressionAttributeValues(
-                                        Map.of(":a", AttributeValue.builder().s("ACTIVATED").build()))
-                                .build();
-
-                        dynamoDbClient.updateItem(activateReq);
-                        context.getLogger().log("ÉXITO: Tarjeta de crédito " + creditCardId + " activada para el usuario " + userId
-                                + " después de 10 compras con débito.");
-
-                        if (notificationQueueUrl != null && !notificationQueueUrl.isEmpty()) {
-                            String msg = String.format(
-                                    "{\"type\":\"CARD.ACTIVATE\",\"data\":{\"userId\":\"%s\",\"cardId\":\"%s\",\"type\":\"CREDIT\",\"status\":\"ACTIVATED\"}}",
-                                    userId, creditCardId);
-                            sqsClient.sendMessage(SendMessageRequest.builder().queueUrl(notificationQueueUrl)
-                                    .messageBody(msg).build());
-                        }
-                        break;
+                    if (notificationQueueUrl != null && !notificationQueueUrl.isEmpty()) {
+                        String msg = String.format(
+                                "{\"type\":\"CARD.ACTIVATE\",\"data\":{\"userId\":\"%s\",\"cardId\":\"%s\",\"type\":\"CREDIT\",\"status\":\"ACTIVATED\"}}",
+                                userId, creditCardId);
+                        sqsClient.sendMessage(SendMessageRequest.builder().queueUrl(notificationQueueUrl)
+                                .messageBody(msg).build());
                     }
+                    break;
                 }
             }
         } catch (Exception e) {

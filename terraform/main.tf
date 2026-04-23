@@ -150,7 +150,7 @@ resource "aws_lambda_function" "card_purchase" {
   role             = aws_iam_role.lambda_role.arn
   handler          = "lambdas.cardPurchaseLambda::handleRequest"
   runtime          = "java17"
-  memory_size      = 512
+  memory_size      = 1024
   timeout          = 30
   source_code_hash = local.jar_hash
 
@@ -189,7 +189,7 @@ resource "aws_lambda_function" "transaction_save" {
   role             = aws_iam_role.lambda_role.arn
   handler          = "lambdas.transactionSaveLambda::handleRequest"
   runtime          = "java17"
-  memory_size      = 512
+  memory_size      = 1024
   timeout          = 30
   source_code_hash = local.jar_hash
 
@@ -208,7 +208,7 @@ resource "aws_lambda_function" "card_paid" {
   role             = aws_iam_role.lambda_role.arn
   handler          = "lambdas.cardPaidLambda::handleRequest"
   runtime          = "java17"
-  memory_size      = 512
+  memory_size      = 1024
   timeout          = 30
   source_code_hash = local.jar_hash
 
@@ -227,7 +227,7 @@ resource "aws_lambda_function" "card_report" {
   role             = aws_iam_role.lambda_role.arn
   handler          = "lambdas.cardGetReportLambda::handleRequest"
   runtime          = "java17"
-  memory_size      = 512
+  memory_size      = 1024
   timeout          = 30
   source_code_hash = local.jar_hash
 
@@ -246,13 +246,14 @@ resource "aws_lambda_function" "get_user_cards" {
   role             = aws_iam_role.lambda_role.arn
   handler          = "lambdas.getUserCardsLambda::handleRequest"
   runtime          = "java17"
-  memory_size      = 512
+  memory_size      = 1024
   timeout          = 30
   source_code_hash = local.jar_hash
 
   environment {
     variables = {
-      CARD_TABLE_NAME = aws_dynamodb_table.card_table.name
+      CARD_TABLE_NAME        = aws_dynamodb_table.card_table.name
+      TRANSACTION_TABLE_NAME = aws_dynamodb_table.transaction_table.name
     }
   }
 }
@@ -445,7 +446,7 @@ resource "aws_lambda_function" "card_info" {
   role             = aws_iam_role.lambda_role.arn
   handler          = "lambdas.cardInfoLambda::handleRequest"
   runtime          = "java17"
-  memory_size      = 512
+  memory_size      = 1024
   timeout          = 30
   source_code_hash = local.jar_hash
 
